@@ -32,16 +32,24 @@ class WebSocketService {
     this.intentionalDisconnect = false; // Reset flag for new connection
 
     try {
-      // Use configuration that matches the working HTML test
-      this.pusher = new Pusher('mysipvrzcwc0i8xemtua', {
-        wsHost: 'localhost',
-        wsPort: 8080,
-        wssPort: 8080,
-        forceTLS: false,
+      // Get configuration from environment variables
+      const reverbKey = process.env.REACT_APP_REVERB_APP_KEY || 'local';
+      const reverbHost = process.env.REACT_APP_REVERB_HOST || 'localhost';
+      const reverbPort = parseInt(process.env.REACT_APP_REVERB_PORT || '8080');
+      const reverbScheme = process.env.REACT_APP_REVERB_SCHEME || 'ws';
+      const authEndpoint = process.env.REACT_APP_AUTH_ENDPOINT || 'http://localhost:8000/api/broadcasting/auth';
+      
+      const forceTLS = reverbScheme === 'wss' || reverbScheme === 'https';
+
+      this.pusher = new Pusher(reverbKey, {
+        wsHost: reverbHost,
+        wsPort: reverbPort,
+        wssPort: reverbPort,
+        forceTLS: forceTLS,
         enabledTransports: ['ws', 'wss'],
         cluster: 'mt1',
         disableStats: true,
-        authEndpoint: 'http://localhost:8000/api/broadcasting/auth',
+        authEndpoint: authEndpoint,
         auth: {
           headers: {
             Authorization: `Bearer ${token}`,
