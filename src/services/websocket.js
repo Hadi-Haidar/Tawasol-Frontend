@@ -1,4 +1,8 @@
 import Echo from 'laravel-echo';
+import Pusher from 'pusher-js';
+
+// Make Pusher available globally for Echo
+window.Pusher = Pusher;
 
 class WebSocketService {
   constructor() {
@@ -50,6 +54,7 @@ class WebSocketService {
       this.echo = new Echo({
         broadcaster: 'reverb',
         key: reverbKey,
+        client: Pusher,  // 🔴 CRITICAL: Pusher-js as transport layer
         wsHost: reverbHost,
         wsPort: reverbPort,
         wssPort: reverbPort,
