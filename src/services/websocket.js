@@ -1,4 +1,4 @@
-import { getEcho, disconnectEcho, isEchoConnected } from '../lib/echo';
+import { createEcho, getEcho, disconnectEcho, isEchoConnected } from '../lib/echo';
 
 class WebSocketService {
   constructor() {
@@ -16,9 +16,9 @@ class WebSocketService {
       return;
     }
     
-    // Get the singleton Echo instance and update its token
+    // Create the singleton Echo instance with token
     // Echo auto-connects, no need to wait
-    getEcho(token);
+    createEcho(token);
     
     this.isInitialized = true;
     this.reconnectAttempts = 0;

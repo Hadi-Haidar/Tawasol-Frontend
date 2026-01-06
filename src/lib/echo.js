@@ -1,82 +1,61 @@
-import Echo from 'laravel-echo';
-import Pusher from 'pusher-js';
+import Echo from "laravel-echo";
+import Pusher from "pusher-js";
 
-// 🔴 MUST be BEFORE new Echo()
 window.Pusher = Pusher;
 
-let echo = null;
+let echoInstance = null;
 
-/**
- * Get or create the Echo instance (singleton pattern)
- */
-export function getEcho(token = null) {
-  // If Echo exists and we have a new token, update the auth headers
-  if (echo && token) {
-    if (echo.connector && echo.connector.options) {
-      echo.connector.options.auth = echo.connector.options.auth || {};
-      echo.connector.options.auth.headers = {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/json',
-      };
-    }
-    return echo;
+export function createEcho(token) {
+  if (echoInstance) return echoInstance;
+
+  if (!token) {
+    throw new Error("Echo cannot be created without auth token");
   }
 
-  if (echo) {
-    return echo;
-  }
+  const scheme = process.env.REACT_APP_REVERB_SCHEME;
+  const isSecure = scheme === "https" || scheme === "wss";
 
-  // Get token from storage if not provided
-  const authToken = token || localStorage.getItem('token') || sessionStorage.getItem('token');
+  const apiUrl = process.env.REACT_APP_API_URL;
+  const baseUrl = apiUrl.replace(/\/api\/?$/, "");
 
-  echo = new Echo({
-    broadcaster: 'reverb',
-    key: process.env.REACT_APP_REVERB_APP_KEY || 'local',
+  echoInstance = new Echo({
+    broadcaster: "reverb",
+    key: process.env.REACT_APP_REVERB_APP_KEY,
 
-    wsHost: 'localhost',
-    wsPort: 8080,
-    forceTLS: false,
+    wsHost: process.env.REACT_APP_REVERB_HOST,
+    wsPort: Number(process.env.REACT_APP_REVERB_PORT),
+    wssPort: 443,
 
-    enabledTransports: ['ws', 'wss'],
-    
-    // 🔴 CRITICAL: Auth endpoint must point to Laravel backend
-    authEndpoint: 'http://localhost:8000/api/broadcasting/auth',
+    forceTLS: isSecure,
+    encrypted: isSecure,
+
+    enabledTransports: ["ws", "wss"],
+
+    authEndpoint: `${baseUrl}/api/broadcasting/auth`,
     auth: {
       headers: {
-        Authorization: `Bearer ${authToken}`,
-        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
       },
     },
   });
 
-  return echo;
+  return echoInstance;
 }
 
-/**
- * Disconnect Echo (rarely needed)
- */
+export function getEcho() {
+  return echoInstance;
+}
+
 export function disconnectEcho() {
-  if (echo) {
-    try {
-      if (echo.disconnect && typeof echo.disconnect === 'function') {
-        echo.disconnect();
-      }
-    } catch (err) {
-      console.error('Error disconnecting Echo:', err);
-    }
+  if (echoInstance?.disconnect) {
+    echoInstance.disconnect();
   }
-  echo = null;
+  echoInstance = null;
 }
 
-/**
- * Check if Echo is connected
- */
 export function isEchoConnected() {
-  return echo && 
-         echo.connector && 
-         echo.connector.pusher && 
-         echo.connector.pusher.connection &&
-         echo.connector.pusher.connection.state === 'connected';
+  return (
+    echoInstance?.connector?.pusher?.connection?.state === "connected"
+  );
 }
-
-export default getEcho;
