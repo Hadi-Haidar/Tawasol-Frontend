@@ -728,10 +728,14 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
         
         const message = event.message;
         
-        // Deduplicate: Check if message already exists
+        // ✅ Deduplicate: Check if message already exists (prevents duplicate keys)
         setMessages(prev => {
-          const exists = prev.some(m => m.id === message.id);
-          if (exists) return prev;
+          // 🚫 Prevent duplicates - React key collision fix
+          if (prev.some(m => m.id === message.id)) {
+            return prev; // Return unchanged if duplicate
+          }
+          
+          // ✅ Add new message only if it doesn't exist
           return [...prev, message];
         });
         
@@ -934,15 +938,17 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
 
   // Effect hooks
   useEffect(() => {
-    if (room?.id && (isMember || isOwner)) {
-      loadMessages();
-      initializeWebSocket();
-    }
+    if (!room?.id || (!isMember && !isOwner)) return;
+
+    // ✅ Fetch messages ONCE when entering room
+    loadMessages();
+    
+    // ✅ Initialize WebSocket ONCE when entering room
+    initializeWebSocket();
 
     return () => {
       if (room?.id) {
         websocketService.leaveRoom(room.id);
-        // websocketService.leavePresenceChannel(room.id); // Removed: Online users functionality
       }
       
       // Cleanup voice recording
@@ -964,7 +970,9 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
         }
       }
     };
-  }, [room?.id, isMember, isOwner, loadMessages, initializeWebSocket]);
+    // ✅ ONLY room?.id in dependencies - loadMessages and initializeWebSocket are stable callbacks
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.id]);
 
   // Enhanced scroll behavior effect - simplified for smart scrolling
   useEffect(() => {
