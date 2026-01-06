@@ -728,7 +728,12 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
         
         const message = event.message;
         
-        setMessages(prev => [...prev, message]);
+        // Deduplicate: Check if message already exists
+        setMessages(prev => {
+          const exists = prev.some(m => m.id === message.id);
+          if (exists) return prev;
+          return [...prev, message];
+        });
         
         // Smart WhatsApp-like scrolling based on message sender
         if (message.user_id === user?.id) {

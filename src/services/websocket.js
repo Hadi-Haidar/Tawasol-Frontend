@@ -1,148 +1,94 @@
-import Echo from 'laravel-echo';
-import Pusher from 'pusher-js';
-
-// Make Pusher available globally for Echo
-window.Pusher = Pusher;
+import { getEcho, disconnectEcho, isEchoConnected } from '../lib/echo';
 
 class WebSocketService {
   constructor() {
-    this.echo = null;
-    this.isConnected = false;
-    this.authToken = null;
     this.channels = new Map();
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
-    this.isReconnecting = false;
     this.reconnectTimeout = null;
-    this.intentionalDisconnect = false;
+    this.isInitialized = false;
   }
 
-  // Initialize Laravel Echo with Reverb broadcaster
+  // Initialize WebSocket with auth token
   initialize(token) {
-    // Prevent multiple initializations
-    if (this.echo && this.isConnected) {
-      console.log('✅ WebSocket already connected');
+    if (!token) {
+      console.warn('No token provided for WebSocket initialization');
       return;
     }
-
-    if (this.echo) {
-      this.disconnect();
-    }
-
-    this.authToken = token;
-    this.intentionalDisconnect = false;
-
-    try {
-      // Get configuration from environment variables
-      const reverbKey = process.env.REACT_APP_REVERB_APP_KEY || 'local';
-      const reverbHost = process.env.REACT_APP_REVERB_HOST || 'localhost';
-      const reverbPort = parseInt(process.env.REACT_APP_REVERB_PORT || '8080');
-      const reverbScheme = process.env.REACT_APP_REVERB_SCHEME || 'http';
-      const authEndpoint = process.env.REACT_APP_AUTH_ENDPOINT || 'http://localhost:8000/api/broadcasting/auth';
-      
-      // Determine TLS settings based on scheme
-      const useTLS = reverbScheme === 'https' || reverbScheme === 'wss';
-
-      console.log('🔌 Initializing Laravel Echo with Reverb:', {
-        host: reverbHost,
-        port: reverbPort,
-        scheme: reverbScheme,
-        useTLS,
-        key: reverbKey.substring(0, 10) + '...',
-      });
-
-      this.echo = new Echo({
-        broadcaster: 'reverb',
-        key: reverbKey,
-        client: Pusher,  // 🔴 CRITICAL: Pusher-js as transport layer
-        wsHost: reverbHost,
-        wsPort: reverbPort,
-        wssPort: reverbPort,
-        forceTLS: useTLS,
-        encrypted: useTLS,
-        disableStats: true,
-        enabledTransports: ['ws', 'wss'],
-        authEndpoint: authEndpoint,
-        auth: {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
-          },
-        },
-      });
-
-      // Listen for connection events
-      if (this.echo.connector && this.echo.connector.pusher) {
-        this.echo.connector.pusher.connection.bind('connected', () => {
-          console.log('✅ WebSocket connected successfully');
-          this.isConnected = true;
-          this.reconnectAttempts = 0;
-          this.isReconnecting = false;
-        });
-
-        this.echo.connector.pusher.connection.bind('disconnected', () => {
-          console.log('⚠️  WebSocket disconnected');
-          this.isConnected = false;
-          this.handleReconnect();
-        });
-
-        this.echo.connector.pusher.connection.bind('failed', (error) => {
-          console.error('❌ WebSocket connection failed:', error);
-          this.isConnected = false;
-          this.handleReconnect();
-        });
-
-        this.echo.connector.pusher.connection.bind('error', (error) => {
-          console.error('❌ WebSocket error:', error);
-          if (!this.isReconnecting) {
-            this.handleReconnect();
-          }
-        });
-      }
-
-    } catch (error) {
-      console.error('❌ Failed to initialize WebSocket:', error);
-    }
+    
+    // Get the singleton Echo instance and update its token
+    // Echo auto-connects, no need to wait
+    getEcho(token);
+    
+    this.isInitialized = true;
+    this.reconnectAttempts = 0;
   }
 
-  // Handle reconnection with exponential backoff
-  handleReconnect() {
-    if (this.intentionalDisconnect) {
-      return;
-    }
+  // Check if connected
+  isConnectedToSocket() {
+    return isEchoConnected();
+  }
 
-    if (this.isReconnecting) {
-      return;
-    }
+  // Get the Echo instance
+  getEcho() {
+    return getEcho();
+  }
 
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('❌ Max reconnection attempts reached');
-      this.isReconnecting = false;
-      return;
-    }
+  // Get Pusher instance (for compatibility)
+  getPusher() {
+    const echo = getEcho();
+    return echo?.connector?.pusher || null;
+  }
 
-    this.isReconnecting = true;
-    this.reconnectAttempts++;
-    
+  // Disconnect (rarely needed, Echo stays alive)
+  disconnect() {
+    // Clear reconnect timeout if any
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
     }
-
-    const delay = Math.min(Math.pow(2, this.reconnectAttempts) * 1000, 30000);
-    console.log(`🔄 Reconnecting in ${delay/1000}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
     
-    this.reconnectTimeout = setTimeout(() => {
-      if (this.authToken && this.isReconnecting && !this.intentionalDisconnect) {
-        this.initialize(this.authToken);
+    // Leave all channels
+    this.channels.forEach((channel, channelName) => {
+      try {
+        this.leaveChannelByName(channelName);
+      } catch (err) {
+        console.warn('Error leaving channel:', channelName, err);
       }
-      this.isReconnecting = false;
-    }, delay);
+    });
+    this.channels.clear();
+    
+    // Note: We don't disconnect Echo itself as it's a singleton
+  }
+
+  // Helper to leave a channel by its name
+  leaveChannelByName(channelName) {
+    const echo = getEcho();
+    if (!echo) return;
+
+    // Extract the actual channel name from our prefixed version
+    const roomIdMatch = channelName.match(/^private-chat\.room\.(\d+)$/);
+    if (roomIdMatch) {
+      echo.leave(`chat.room.${roomIdMatch[1]}`);
+    } else {
+      const userMatch = channelName.match(/^private-user\.(\d+)$/);
+      if (userMatch) {
+        echo.leave(`user.${userMatch[1]}`);
+      } else {
+        // Generic channel
+        const match = channelName.match(/^(?:private-)?(.+)$/);
+        if (match) {
+          echo.leave(match[1]);
+        }
+      }
+    }
   }
 
   // Join a chat room
   joinRoom(roomId, callbacks = {}) {
-    if (!this.echo) {
-      console.error('❌ WebSocket not initialized');
+    const echo = getEcho();
+    if (!echo) {
+      console.error('Echo not initialized');
       return null;
     }
 
@@ -154,63 +100,36 @@ class WebSocketService {
     }
 
     try {
-      const channel = this.echo.private(`chat.room.${roomId}`);
+      const channel = echo.private(`chat.room.${roomId}`);
 
-      // Listen for new messages
+      // Bind events - use dot prefix because backend uses broadcastAs()
       if (callbacks.onMessage) {
-        channel.listen('message.sent', (data) => {
-          callbacks.onMessage(data);
-        });
+        channel.listen('.message.sent', callbacks.onMessage);
       }
-
-      // Listen for message edited events
       if (callbacks.onMessageEdited) {
-        channel.listen('message.edited', (data) => {
-          callbacks.onMessageEdited(data);
-        });
+        channel.listen('.message.edited', callbacks.onMessageEdited);
       }
-
-      // Listen for message deleted events
       if (callbacks.onMessageDeleted) {
-        channel.listen('message.deleted', (data) => {
-          callbacks.onMessageDeleted(data);
-        });
+        channel.listen('.message.deleted', callbacks.onMessageDeleted);
       }
-
-      // Listen for typing indicators
       if (callbacks.onTyping) {
-        channel.listen('user.typing', (data) => {
-          callbacks.onTyping(data);
-        });
+        channel.listen('.user.typing', callbacks.onTyping);
       }
-
-      // Listen for user joined events
       if (callbacks.onUserJoined) {
-        channel.listen('user.joined', (data) => {
-          callbacks.onUserJoined(data);
-        });
+        channel.listen('.user.joined', callbacks.onUserJoined);
       }
-
-      // Listen for user left events
       if (callbacks.onUserLeft) {
-        channel.listen('user.left', (data) => {
-          callbacks.onUserLeft(data);
-        });
+        channel.listen('.user.left', callbacks.onUserLeft);
       }
-
-      // Listen for online status changes
       if (callbacks.onOnlineStatusChange) {
-        channel.listen('user.online.status', (data) => {
-          callbacks.onOnlineStatusChange(data);
-        });
+        channel.listen('.user.online.status', callbacks.onOnlineStatusChange);
       }
 
-      console.log(`✅ Joined room: ${roomId}`);
       this.channels.set(channelName, channel);
       
       return channel;
     } catch (error) {
-      console.error(`❌ Failed to join room ${roomId}:`, error);
+      console.error(`Failed to join room ${roomId}:`, error);
       return null;
     }
   }
@@ -218,27 +137,19 @@ class WebSocketService {
   // Leave a chat room
   leaveRoom(roomId) {
     const channelName = `private-chat.room.${roomId}`;
-    const channel = this.channels.get(channelName);
     
-    if (channel) {
-      this.echo.leave(`chat.room.${roomId}`);
+    if (this.channels.has(channelName)) {
+      this.leaveChannelByName(channelName);
       this.channels.delete(channelName);
-      console.log(`👋 Left room: ${roomId}`);
-    }
-    
-    if (this.channels.size === 0) {
-      this.intentionalDisconnect = true;
     }
   }
 
   // Send typing indicator
   sendTypingIndicator(roomId, isTyping = true) {
-    if (!this.echo) return;
-
     const channelName = `private-chat.room.${roomId}`;
     const channel = this.channels.get(channelName);
     
-    if (channel) {
+    if (channel && channel.whisper) {
       channel.whisper('typing', {
         user_id: this.getCurrentUserId(),
         is_typing: isTyping,
@@ -246,14 +157,12 @@ class WebSocketService {
     }
   }
 
-  // Listen for typing indicators
+  // Listen for typing
   listenForTyping(roomId, callback) {
-    if (!this.echo) return;
-
     const channelName = `private-chat.room.${roomId}`;
     const channel = this.channels.get(channelName);
     
-    if (channel) {
+    if (channel && channel.listenForWhisper) {
       channel.listenForWhisper('typing', callback);
     }
   }
@@ -264,43 +173,11 @@ class WebSocketService {
     return user.id;
   }
 
-  // Disconnect from WebSocket
-  disconnect() {
-    this.intentionalDisconnect = true;
-    
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
-    
-    this.isReconnecting = false;
-    
-    if (this.echo) {
-      // Leave all channels
-      this.channels.forEach((channel, channelName) => {
-        const roomIdMatch = channelName.match(/private-chat\.room\.(\d+)/);
-        if (roomIdMatch) {
-          this.echo.leave(`chat.room.${roomIdMatch[1]}`);
-        }
-      });
-      this.channels.clear();
-      
-      this.echo.disconnect();
-      this.echo = null;
-      this.isConnected = false;
-      console.log('👋 WebSocket disconnected');
-    }
-  }
-
-  // Check connection status
-  isConnectedToSocket() {
-    return this.isConnected;
-  }
-
-  // Subscribe to user's private notification channel
+  // Subscribe to user channel for notifications
   subscribeToUserChannel(userId, callbacks = {}) {
-    if (!this.echo) {
-      console.error('❌ WebSocket not initialized');
+    const echo = getEcho();
+    if (!echo) {
+      console.error('Echo not initialized');
       return null;
     }
 
@@ -311,54 +188,42 @@ class WebSocketService {
     }
 
     try {
-      const channel = this.echo.private(`user.${userId}`);
+      const channel = echo.private(`user.${userId}`);
 
-      // Listen for new notifications
       if (callbacks.onNotificationReceived) {
-        channel.listen('notification.created', (data) => {
-          callbacks.onNotificationReceived(data);
-        });
+        channel.listen('notification.created', callbacks.onNotificationReceived);
       }
-
-      // Listen for notification read events
       if (callbacks.onNotificationRead) {
-        channel.listen('notification.read', (data) => {
-          callbacks.onNotificationRead(data);
-        });
+        channel.listen('notification.read', callbacks.onNotificationRead);
       }
-
-      // Listen for notification deleted events
       if (callbacks.onNotificationDeleted) {
-        channel.listen('notification.deleted', (data) => {
-          callbacks.onNotificationDeleted(data);
-        });
+        channel.listen('notification.deleted', callbacks.onNotificationDeleted);
       }
 
-      console.log(`✅ Subscribed to user channel: ${userId}`);
       this.channels.set(channelName, channel);
       
       return channel;
     } catch (error) {
-      console.error(`❌ Failed to subscribe to user channel ${userId}:`, error);
+      console.error(`Failed to subscribe to user channel ${userId}:`, error);
       return null;
     }
   }
 
-  // Unsubscribe from user's notification channel
+  // Unsubscribe from user channel
   unsubscribeFromUserChannel(userId) {
     const channelName = `private-user.${userId}`;
     
     if (this.channels.has(channelName)) {
-      this.echo.leave(`user.${userId}`);
+      this.leaveChannelByName(channelName);
       this.channels.delete(channelName);
-      console.log(`👋 Unsubscribed from user channel: ${userId}`);
     }
   }
 
-  // Subscribe to specific product stock updates
+  // Subscribe to product stock updates
   subscribeToProductStock(productId, callbacks = {}) {
-    if (!this.echo) {
-      console.error('❌ WebSocket not initialized');
+    const echo = getEcho();
+    if (!echo) {
+      console.error('❌ Echo not initialized');
       return null;
     }
 
@@ -369,20 +234,13 @@ class WebSocketService {
     }
 
     try {
-      const channel = this.echo.channel(`product.${productId}`);
+      const channel = echo.channel(`product.${productId}`);
 
-      // Listen for stock updates
       if (callbacks.onStockUpdated) {
-        channel.listen('product.stock.updated', (data) => {
-          callbacks.onStockUpdated(data);
-        });
+        channel.listen('product.stock.updated', callbacks.onStockUpdated);
       }
-
-      // Listen for rating updates
       if (callbacks.onRatingUpdated) {
-        channel.listen('product.rating.updated', (data) => {
-          callbacks.onRatingUpdated(data);
-        });
+        channel.listen('product.rating.updated', callbacks.onRatingUpdated);
       }
 
       this.channels.set(channelName, channel);
@@ -393,10 +251,24 @@ class WebSocketService {
     }
   }
 
-  // Subscribe to store-wide product updates
+  // Unsubscribe from product stock
+  unsubscribeFromProductStock(productId) {
+    const channelName = `product.${productId}`;
+    
+    if (this.channels.has(channelName)) {
+      const echo = getEcho();
+      if (echo) {
+        echo.leave(`product.${productId}`);
+      }
+      this.channels.delete(channelName);
+    }
+  }
+
+  // Subscribe to store products
   subscribeToStoreProducts(callbacks = {}) {
-    if (!this.echo) {
-      console.error('❌ WebSocket not initialized');
+    const echo = getEcho();
+    if (!echo) {
+      console.error('❌ Echo not initialized');
       return null;
     }
 
@@ -407,20 +279,13 @@ class WebSocketService {
     }
 
     try {
-      const channel = this.echo.channel('store.products');
+      const channel = echo.channel('store.products');
 
-      // Listen for stock updates
       if (callbacks.onStockUpdated) {
-        channel.listen('product.stock.updated', (data) => {
-          callbacks.onStockUpdated(data);
-        });
+        channel.listen('product.stock.updated', callbacks.onStockUpdated);
       }
-
-      // Listen for rating updates
       if (callbacks.onRatingUpdated) {
-        channel.listen('product.rating.updated', (data) => {
-          callbacks.onRatingUpdated(data);
-        });
+        channel.listen('product.rating.updated', callbacks.onRatingUpdated);
       }
 
       this.channels.set(channelName, channel);
@@ -431,34 +296,17 @@ class WebSocketService {
     }
   }
 
-  // Unsubscribe from specific product updates
-  unsubscribeFromProductStock(productId) {
-    const channelName = `product.${productId}`;
-    
-    if (this.channels.has(channelName)) {
-      this.echo.leave(`product.${productId}`);
-      this.channels.delete(channelName);
-    }
-  }
-
-  // Unsubscribe from store-wide product updates
+  // Unsubscribe from store products
   unsubscribeFromStoreProducts() {
     const channelName = 'store.products';
     
     if (this.channels.has(channelName)) {
-      this.echo.leave('store.products');
+      const echo = getEcho();
+      if (echo) {
+        echo.leave('store.products');
+      }
       this.channels.delete(channelName);
     }
-  }
-
-  // Get Echo instance for custom operations (compatibility with old code)
-  getPusher() {
-    return this.echo?.connector?.pusher;
-  }
-
-  // Get Echo instance
-  getEcho() {
-    return this.echo;
   }
 }
 
