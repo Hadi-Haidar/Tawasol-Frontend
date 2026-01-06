@@ -22,12 +22,7 @@ export function createEcho(token) {
 
   echoInstance = new Echo({
     broadcaster: "reverb",
-
-    // 🔑 Reverb key ONLY (NOT pusher key)
     key: process.env.REACT_APP_REVERB_APP_KEY,
-
-    // 🔒 IMPORTANT: prevent pusher cloud fallback
-    cluster: undefined,
 
     authEndpoint: `${baseUrl}/api/broadcasting/auth`,
     auth: {
@@ -40,14 +35,16 @@ export function createEcho(token) {
     ...(isProduction
       ? {
           // ✅ Laravel Cloud Managed Reverb
+          wsHost: process.env.REACT_APP_REVERB_HOST || undefined,
+          wssPort: 443,
           forceTLS: true,
           encrypted: true,
           enabledTransports: ["wss"],
         }
       : {
           // ✅ Local self-hosted Reverb
-          wsHost: "localhost",
-          wsPort: 8080,
+          wsHost: process.env.REACT_APP_REVERB_HOST || "localhost",
+          wsPort: Number(process.env.REACT_APP_REVERB_PORT || 8080),
           forceTLS: false,
           encrypted: false,
           enabledTransports: ["ws"],
