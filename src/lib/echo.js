@@ -12,24 +12,18 @@ export function createEcho(token) {
     throw new Error("Echo cannot be created without auth token");
   }
 
-  const scheme = process.env.REACT_APP_REVERB_SCHEME;
-  const isSecure = scheme === "https" || scheme === "wss";
-
   const apiUrl = process.env.REACT_APP_API_URL;
+  if (!apiUrl) {
+    throw new Error("REACT_APP_API_URL is required");
+  }
+
   const baseUrl = apiUrl.replace(/\/api\/?$/, "");
 
-  echoInstance = new Echo({
+  const isProduction = process.env.NODE_ENV === "production";
+
+  const echoConfig = {
     broadcaster: "reverb",
     key: process.env.REACT_APP_REVERB_APP_KEY,
-
-    wsHost: process.env.REACT_APP_REVERB_HOST,
-    wsPort: Number(process.env.REACT_APP_REVERB_PORT),
-    wssPort: 443,
-
-    forceTLS: isSecure,
-    encrypted: isSecure,
-
-    enabledTransports: ["ws", "wss"],
 
     authEndpoint: `${baseUrl}/api/broadcasting/auth`,
     auth: {
@@ -38,7 +32,22 @@ export function createEcho(token) {
         Accept: "application/json",
       },
     },
-  });
+  };
+
+  if (isProduction) {
+    // ✅ Laravel Cloud Managed Reverb
+    echoConfig.forceTLS = true;
+    echoConfig.encrypted = true;
+  } else {
+    // ✅ Local self-hosted Reverb
+    echoConfig.wsHost = process.env.REACT_APP_REVERB_HOST || "localhost";
+    echoConfig.wsPort = Number(process.env.REACT_APP_REVERB_PORT || 8080);
+    echoConfig.forceTLS = false;
+    echoConfig.encrypted = false;
+    echoConfig.enabledTransports = ["ws"];
+  }
+
+  echoInstance = new Echo(echoConfig);
 
   return echoInstance;
 }
@@ -55,7 +64,5 @@ export function disconnectEcho() {
 }
 
 export function isEchoConnected() {
-  return (
-    echoInstance?.connector?.pusher?.connection?.state === "connected"
-  );
+  return echoInstance?.connector?.pusher?.connection?.state === "connected";
 }
