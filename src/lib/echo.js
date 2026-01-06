@@ -18,12 +18,16 @@ export function createEcho(token) {
   }
 
   const baseUrl = apiUrl.replace(/\/api\/?$/, "");
-
   const isProduction = process.env.NODE_ENV === "production";
 
-  const echoConfig = {
+  echoInstance = new Echo({
     broadcaster: "reverb",
+
+    // 🔑 Reverb key ONLY (NOT pusher key)
     key: process.env.REACT_APP_REVERB_APP_KEY,
+
+    // 🔒 IMPORTANT: prevent pusher cloud fallback
+    cluster: undefined,
 
     authEndpoint: `${baseUrl}/api/broadcasting/auth`,
     auth: {
@@ -32,22 +36,23 @@ export function createEcho(token) {
         Accept: "application/json",
       },
     },
-  };
 
-  if (isProduction) {
-    // ✅ Laravel Cloud Managed Reverb
-    echoConfig.forceTLS = true;
-    echoConfig.encrypted = true;
-  } else {
-    // ✅ Local self-hosted Reverb
-    echoConfig.wsHost = process.env.REACT_APP_REVERB_HOST || "localhost";
-    echoConfig.wsPort = Number(process.env.REACT_APP_REVERB_PORT || 8080);
-    echoConfig.forceTLS = false;
-    echoConfig.encrypted = false;
-    echoConfig.enabledTransports = ["ws"];
-  }
-
-  echoInstance = new Echo(echoConfig);
+    ...(isProduction
+      ? {
+          // ✅ Laravel Cloud Managed Reverb
+          forceTLS: true,
+          encrypted: true,
+          enabledTransports: ["wss"],
+        }
+      : {
+          // ✅ Local self-hosted Reverb
+          wsHost: "localhost",
+          wsPort: 8080,
+          forceTLS: false,
+          encrypted: false,
+          enabledTransports: ["ws"],
+        }),
+  });
 
   return echoInstance;
 }
@@ -57,9 +62,7 @@ export function getEcho() {
 }
 
 export function disconnectEcho() {
-  if (echoInstance?.disconnect) {
-    echoInstance.disconnect();
-  }
+  echoInstance?.disconnect?.();
   echoInstance = null;
 }
 
