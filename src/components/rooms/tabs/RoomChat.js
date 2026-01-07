@@ -169,6 +169,10 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
         )
       );
       
+      // 📦 PERFORMANCE: Clear cache when editing message
+      const cacheKey = `messages_room_${room.id}`;
+      sessionStorage.removeItem(cacheKey);
+      
       setEditingMessageId(null);
       setEditMessageText('');} catch (error) {
       console.error('❌ Failed to edit message:', error);
@@ -197,6 +201,10 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
       setMessages(prevMessages => 
         prevMessages.filter(msg => msg.id !== deletingMessageId)
       );
+      
+      // 📦 PERFORMANCE: Clear cache when deleting message
+      const cacheKey = `messages_room_${room.id}`;
+      sessionStorage.removeItem(cacheKey);
       
       setDeletingMessageId(null);
       setShowDeleteConfirm(false);} catch (error) {
@@ -550,6 +558,10 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
       setRecordedAudio(null);
       setRecordingTime(0);
       
+      // 📦 PERFORMANCE: Clear cache when sending voice message
+      const cacheKey = `messages_room_${room.id}`;
+      sessionStorage.removeItem(cacheKey);
+      
       // WhatsApp-like auto-focus after sending (immediate)
       focusInputAfterSend(50);
       
@@ -647,6 +659,10 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
       setSelectedFiles([]);
       setFilePreviewMode(null);
       
+      // 📦 PERFORMANCE: Clear cache when sending files
+      const cacheKey = `messages_room_${room.id}`;
+      sessionStorage.removeItem(cacheKey);
+      
       // Auto-focus and scroll
       focusInputAfterSend(100);
       smartAutoScroll(50, true);
@@ -682,11 +698,35 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
     setImageModalOpen(false);
   };
 
-  // Essential chat functions
+  // 🚀 PERFORMANCE: Essential chat functions with caching
   const loadMessages = useCallback(async (pageNum = 1, append = false) => {
     if (!room?.id) return;
     
     try {
+      setLoading(true);
+      
+      // 📦 PERFORMANCE: Check sessionStorage cache first (only for initial page)
+      if (pageNum === 1 && !append) {
+        const cacheKey = `messages_room_${room.id}`;
+        const cached = sessionStorage.getItem(cacheKey);
+        
+        if (cached) {
+          try {
+            const { data, timestamp } = JSON.parse(cached);
+            // Cache valid for 30 seconds
+            if (Date.now() - timestamp < 30000) {
+              setMessages(data);
+              setLoading(false);
+              setTimeout(scrollToBottomInstant, 100);
+              return;
+            }
+          } catch (e) {
+            // Invalid cache, proceed with fetch
+            sessionStorage.removeItem(cacheKey);
+          }
+        }
+      }
+      
       const response = await chatApiService.getMessages(room.id, pageNum);
       const newMessages = response.data || [];
       
@@ -696,7 +736,18 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
       if (append) {
         setMessages(prev => [...validMessages.reverse(), ...prev]);
       } else {
-        setMessages(validMessages.reverse());
+        const reversedMessages = validMessages.reverse();
+        setMessages(reversedMessages);
+        
+        // 📦 PERFORMANCE: Cache the initial messages
+        if (pageNum === 1) {
+          const cacheKey = `messages_room_${room.id}`;
+          sessionStorage.setItem(cacheKey, JSON.stringify({
+            data: reversedMessages,
+            timestamp: Date.now()
+          }));
+        }
+        
         // Instant scroll to bottom when loading initial messages
         setTimeout(scrollToBottomInstant, 100);
       }
@@ -738,6 +789,10 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
           // ✅ Add new message only if it doesn't exist
           return [...prev, message];
         });
+        
+        // 📦 PERFORMANCE: Clear cache when receiving new message
+        const cacheKey = `messages_room_${room.id}`;
+        sessionStorage.removeItem(cacheKey);
         
         // Smart WhatsApp-like scrolling based on message sender
         if (message.user_id === user?.id) {
@@ -923,6 +978,10 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
       });
 
       setNewMessage('');
+      
+      // 📦 PERFORMANCE: Clear cache when sending new message
+      const cacheKey = `messages_room_${room.id}`;
+      sessionStorage.removeItem(cacheKey);
       
       // WhatsApp-like auto-focus after sending (immediate)
       focusInputAfterSend(50);
@@ -1779,4 +1838,5 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   );
 };
 
-export default RoomChat; 
+// 🚀 PERFORMANCE: Memoize the entire component to prevent unnecessary re-renders
+export default React.memo(RoomChat); 
