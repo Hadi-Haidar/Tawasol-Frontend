@@ -80,7 +80,18 @@ const OptimizedImage = ({
     }
     
     // Use optimized image endpoint for better performance
-    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    // Get API URL from env, or derive from current window location in production
+    let apiUrl = process.env.REACT_APP_API_URL;
+    
+    // Fallback to current origin if env var is missing (production safety)
+    if (!apiUrl) {
+      apiUrl = window.location.origin.includes('localhost') 
+        ? 'http://localhost:8000' 
+        : window.location.origin;
+    }
+    
+    // Remove /api suffix if present
+    apiUrl = apiUrl.replace('/api', '');
     
     // Extract filename from path (e.g., "product-images/abc123.jpg" -> "abc123.jpg")
     let filename = src;

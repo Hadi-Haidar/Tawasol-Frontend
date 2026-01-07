@@ -481,7 +481,8 @@ const PostCard = memo(({ post, showRoomInfo = false, onViewComments, onEdit, onD
               <div className="mt-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {post.media.slice(0, 6).map((media, index) => {
-                    const mediaUrl = `http://localhost:8000/storage/${media.file_path}`;
+                    // Use file_url from backend (already generated with correct domain)
+                    const mediaUrl = media.file_url || `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/images/posts/${media.file_path.replace('posts/', '')}`;
                     
                     if (media.media_type === 'image') {
                       return (
