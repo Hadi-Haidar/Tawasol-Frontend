@@ -17,13 +17,24 @@ export function createEcho(token) {
     throw new Error("REACT_APP_API_URL is required");
   }
 
+  // Get Pusher credentials - support both naming conventions
+  const pusherKey = process.env.REACT_APP_PUSHER_APP_KEY || process.env.REACT_APP_PUSHER_KEY;
+  const pusherCluster = process.env.REACT_APP_PUSHER_APP_CLUSTER || process.env.REACT_APP_PUSHER_CLUSTER || "eu";
+
+  if (!pusherKey) {
+    throw new Error(
+      "Pusher app key is required. Please set REACT_APP_PUSHER_APP_KEY or REACT_APP_PUSHER_KEY in your .env file"
+    );
+  }
+
   const baseUrl = apiUrl.replace(/\/api\/?$/, "");
-  const isProduction = process.env.NODE_ENV === "production";
 
   echoInstance = new Echo({
-    broadcaster: "reverb",
-    key: process.env.REACT_APP_REVERB_APP_KEY,
-
+    broadcaster: "pusher",
+    key: pusherKey,
+    cluster: pusherCluster,
+    forceTLS: true,
+    encrypted: true,
     authEndpoint: `${baseUrl}/api/broadcasting/auth`,
     auth: {
       headers: {
@@ -31,24 +42,6 @@ export function createEcho(token) {
         Accept: "application/json",
       },
     },
-
-    ...(isProduction
-      ? {
-          // ✅ Laravel Cloud Managed Reverb
-          wsHost: process.env.REACT_APP_REVERB_HOST || undefined,
-          wssPort: 443,
-          forceTLS: true,
-          encrypted: true,
-          enabledTransports: ["wss"],
-        }
-      : {
-          // ✅ Local self-hosted Reverb
-          wsHost: process.env.REACT_APP_REVERB_HOST || "localhost",
-          wsPort: Number(process.env.REACT_APP_REVERB_PORT || 8080),
-          forceTLS: false,
-          encrypted: false,
-          enabledTransports: ["ws"],
-        }),
   });
 
   return echoInstance;
