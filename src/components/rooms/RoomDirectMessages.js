@@ -254,23 +254,24 @@ const RoomDirectMessages = ({ room, currentUser }) => {
     const websocketService = require('../../services/websocket').default;
     websocketService.initialize(token);
 
-    // Subscribe to user's private channel for direct messages
-    const userChannel = websocketService.pusher?.subscribe(`private-user.${currentUser.id}`);
-
-    if (userChannel) {
-      // Listen for direct message events
-      userChannel.bind('direct.message.sent', handleDirectMessageUpdate);
+    // Subscribe to user's private channel for direct messages using Laravel Echo
+    const echo = websocketService.getEcho();
+    if (echo) {
+      const userChannel = echo.private(`user.${currentUser.id}`);
       
-      // Listen for message read events
-      userChannel.bind('direct.message.read', handleMessageRead);}
+      // Listen for direct message events (use dot prefix for custom event names)
+      userChannel.listen('.direct.message.sent', handleDirectMessageUpdate);
+      
+      // Listen for message read events (use dot prefix for custom event names)
+      userChannel.listen('.direct.message.read', handleMessageRead);
 
-    return () => {
-      // Cleanup WebSocket listeners
-      if (userChannel) {
-        userChannel.unbind('direct.message.sent', handleDirectMessageUpdate);
-        userChannel.unbind('direct.message.read', handleMessageRead);
-        websocketService.pusher?.unsubscribe(`private-user.${currentUser.id}`);}
-    };
+      return () => {
+        // Cleanup WebSocket listeners - Echo handles cleanup automatically when leaving channel
+        echo.leave(`user.${currentUser.id}`);
+      };
+    }
+    
+    return () => {};
   }, [room?.id, currentUser?.id, conversations]);
 
   if (!room) return null;

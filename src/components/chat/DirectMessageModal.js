@@ -300,12 +300,13 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
       if (token) {
         websocketService.initialize(token);
         
-        // Subscribe to user's private channel for direct messages
-        const userChannel = websocketService.pusher?.subscribe(`private-user.${currentUser.id}`);
-        
-        if (userChannel) {
-          // Listen for new direct messages
-          userChannel.bind('direct.message.sent', (event) => {
+        // Subscribe to user's private channel for direct messages using Laravel Echo
+        const echo = websocketService.getEcho();
+        if (echo) {
+          const userChannel = echo.private(`user.${currentUser.id}`);
+          
+          // Listen for new direct messages (use dot prefix for custom event names)
+          userChannel.listen('.direct.message.sent', (event) => {
             if (event?.message && event.conversation_id === data.conversation_id) {
               // Prevent duplicate messages by checking if message ID already exists
               setMessages(prev => {
@@ -337,8 +338,8 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
             }
           });
 
-          // Listen for message edits
-          userChannel.bind('direct.message.edited', (event) => {
+          // Listen for message edits (use dot prefix for custom event names)
+          userChannel.listen('.direct.message.edited', (event) => {
             if (event?.message && event.conversation_id === data.conversation_id) {
               setMessages(prev => prev.map(msg => 
                 msg.id === event.message.id ? event.message : msg
@@ -346,15 +347,15 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
             }
           });
 
-          // Listen for message deletions
-          userChannel.bind('direct.message.deleted', (event) => {
+          // Listen for message deletions (use dot prefix for custom event names)
+          userChannel.listen('.direct.message.deleted', (event) => {
             if (event?.message_id && event.conversation_id === data.conversation_id) {
               setMessages(prev => prev.filter(msg => msg.id !== event.message_id));
             }
           });
 
-          // Listen for typing indicators
-          userChannel.bind('direct.message.typing', (event) => {
+          // Listen for typing indicators (use dot prefix for custom event names)
+          userChannel.listen('.direct.message.typing', (event) => {
             if (event?.conversation_id === data.conversation_id && event.sender.id !== currentUser.id) {
               setTypingUsers(prev => {
                 if (event.is_typing) {
@@ -374,8 +375,9 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
             }
           });
 
-          // Listen for message read events to update check marks in real-time
-          userChannel.bind('direct.message.read', (event) => {if (event?.conversation_id === data.conversation_id) {
+          // Listen for message read events to update check marks in real-time (use dot prefix for custom event names)
+          userChannel.listen('.direct.message.read', (event) => {
+            if (event?.conversation_id === data.conversation_id) {
               // Update read status for messages when they are read
               setMessages(prev => {
                 let updatedCount = 0;
@@ -617,8 +619,11 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
       }
       
       if (currentUser?.id) {
-        // Unsubscribe from user's private channel
-        websocketService.pusher?.unsubscribe(`private-user.${currentUser.id}`);
+        // Unsubscribe from user's private channel using Echo
+        const echo = websocketService.getEcho();
+        if (echo) {
+          echo.leave(`user.${currentUser.id}`);
+        }
       }
       // Clean up all state
       setMessages([]);
