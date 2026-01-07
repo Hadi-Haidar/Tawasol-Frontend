@@ -10,7 +10,6 @@ import {
   ArrowDownTrayIcon,
   PencilIcon,
   TrashIcon,
-  
 } from '@heroicons/react/24/outline';
 import { formatDistanceToNow } from 'date-fns';
 import websocketService from '../../../services/websocket';
@@ -25,6 +24,8 @@ import VoiceMessage from '../../audio/VoiceMessage';
 const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   // Helper function to determine message author's role
   const getMessageAuthorRole = (message, room) => {
@@ -137,6 +138,9 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   const messagesContainerRef = useRef(null);
   const recordingTimerRef = useRef(null);
   const editInputRef = useRef(null);
+  const isInitialMountRef = useRef(true);
+  const hasFocusedRef = useRef(false);
+  const hasScrolledRef = useRef(false);
 
   // Edit message functions
   const startEditMessage = (message) => {
@@ -207,9 +211,24 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
       sessionStorage.removeItem(cacheKey);
       
       setDeletingMessageId(null);
-      setShowDeleteConfirm(false);} catch (error) {
+      setShowDeleteConfirm(false);
+    } catch (error) {
+      // Handle 404 gracefully - message might already be deleted
+      if (error.response?.status === 404) {
+        // Message doesn't exist, remove from local state anyway
+        setMessages(prevMessages => 
+          prevMessages.filter(msg => msg.id !== deletingMessageId)
+        );
+        setDeletingMessageId(null);
+        setShowDeleteConfirm(false);
+        return;
+      }
+      
       console.error('❌ Failed to delete message:', error);
+      // Only show alert for non-404 errors
+      if (error.response?.status !== 404) {
       alert('Failed to delete message. Please try again.');
+      }
     }
   };
 
@@ -1033,32 +1052,51 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room?.id]);
 
-  // Enhanced scroll behavior effect - simplified for smart scrolling
+  // Enhanced scroll behavior - only scroll on initial load, not when switching tabs
   useEffect(() => {
     // Only handle initial scroll to bottom when messages first load
-    if (messages.length > 0 && lastScrollTop === 0) {
-      setTimeout(() => {
-        if (messagesContainerRef.current) {
+    if (messages.length > 0 && lastScrollTop === 0 && !hasScrolledRef.current && isInitialMountRef.current) {
+      const timer = setTimeout(() => {
+        if (messagesContainerRef.current && !hasScrolledRef.current) {
           const container = messagesContainerRef.current;
           container.scrollTo({
             top: container.scrollHeight,
             behavior: 'auto' // Instant for initial load
           });
           setLastScrollTop(container.scrollTop);
+          hasScrolledRef.current = true;
         }
       }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [messages.length]); // Only run when message count changes
+  }, [messages.length, lastScrollTop]);
 
-  // Auto-focus input when component mounts (WhatsApp behavior)
+  // Reset scroll flag when room changes
   useEffect(() => {
-    if ((isMember || isOwner) && inputRef.current) {
-      // Small delay to ensure component is fully rendered
-      setTimeout(() => {
+    hasScrolledRef.current = false;
+  }, [room?.id]);
+
+  // Auto-focus input only on initial mount, not when switching tabs
+  useEffect(() => {
+    // Only focus on initial mount, not when switching tabs
+    if (isInitialMountRef.current && (isMember || isOwner) && inputRef.current && !hasFocusedRef.current) {
+      const timer = setTimeout(() => {
+        if (inputRef.current && !hasFocusedRef.current) {
         inputRef.current?.focus();
-      }, 500);
+          hasFocusedRef.current = true;
+        }
+      }, 300);
+      
+      isInitialMountRef.current = false;
+      return () => clearTimeout(timer);
     }
-  }, [isMember, isOwner]); // Run when membership status changes
+  }, [isMember, isOwner]);
+  
+  // Reset focus flag when room changes
+  useEffect(() => {
+    isInitialMountRef.current = true;
+    hasFocusedRef.current = false;
+  }, [room?.id]);
 
   // Initialize scroll state
   useEffect(() => {
@@ -1092,7 +1130,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
     switch (message.type) {
       case 'text':
         return (
-          <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">
+          <p className="text-xs sm:text-sm leading-relaxed break-words whitespace-pre-wrap">
             {message.message || '[No message content]'}
           </p>
         );
@@ -1173,28 +1211,41 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
 
   return (
     <>
-      {/* Main Chat Interface */}
-      <div className="h-[600px] bg-gradient-to-b from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 flex rounded-lg overflow-hidden shadow-sm relative">
+      {/* Main Chat Interface - Fully Responsive */}
+      <div className="h-[calc(100vh-16rem)] sm:h-[calc(100vh-14rem)] md:h-[600px] bg-gradient-to-b from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 flex flex-col md:flex-row rounded-lg shadow-sm relative">
         {/* Chat Messages Area */}
-        <div className="flex-1 flex flex-col">
-          {/* Messages Area */}
+        <div className="flex-1 flex flex-col min-w-0 relative min-h-0">
+          {/* Mobile Sidebar Toggle Button */}
+          {isMobile && (
+            <button
+              onClick={() => setShowSidebar(!showSidebar)}
+              className="absolute top-3 right-3 z-20 p-2 bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors touch-manipulation"
+              aria-label="Toggle members sidebar"
+            >
+              <UsersIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+            </button>
+          )}
+
+          {/* Messages Area - Scrollable */}
           <div 
             ref={messagesContainerRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto p-6 space-y-4 pb-24"
+            className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4 min-h-0"
             style={{
               backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23f3f4f6' fill-opacity='0.3'%3E%3Cpath d='m36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+              WebkitOverflowScrolling: 'touch', // Smooth scrolling on iOS
+              scrollBehavior: 'smooth',
             }}
           >
             {loading ? (
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {[...Array(5)].map((_, index) => (
                   <div key={`skeleton-${index}`} className="animate-pulse">
-                    <div className="flex items-start space-x-3">
-                      <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
-                      <div className="flex-1">
-                        <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded w-1/4 mb-2"></div>
-                        <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-3/4"></div>
+                    <div className="flex items-start space-x-2 sm:space-x-3">
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gray-300 dark:bg-gray-600 rounded-full flex-shrink-0"></div>
+                      <div className="flex-1 min-w-0">
+                        <div className="h-3 sm:h-4 bg-gray-300 dark:bg-gray-600 rounded w-1/4 mb-1.5 sm:mb-2"></div>
+                        <div className="h-2.5 sm:h-3 bg-gray-300 dark:bg-gray-600 rounded w-3/4"></div>
                       </div>
                     </div>
                   </div>
@@ -1217,7 +1268,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                         </div>
                       ) : (
                         <div 
-                          className={`flex items-end space-x-2 group ${
+                          className={`flex items-end space-x-2 sm:space-x-3 group ${
                             message.user_id === user?.id ? 'flex-row-reverse space-x-reverse' : ''
                           }`}
                           onMouseEnter={() => setHoveredMessageId(message.id)}
@@ -1229,30 +1280,31 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                               user={message.user}
                               size="sm"
                               showBorder={true}
+                              className="w-7 h-7 sm:w-8 sm:h-8"
                             />
                           </div>
 
                           {/* Message Content */}
-                          <div className={`flex-1 max-w-xs lg:max-w-md relative ${
+                          <div className={`flex-1 max-w-[75%] sm:max-w-xs md:max-w-sm lg:max-w-md relative ${
                             message.user_id === user?.id ? 'text-right' : ''
                           }`}>
                             {/* Show sender name and timestamp only for others */}
                             {message.user_id !== user?.id && (
-                              <div className="flex items-baseline space-x-2 mb-1">
-                                <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              <div className="flex items-baseline flex-wrap gap-1.5 sm:gap-2 mb-1">
+                                <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">
                                   {message.user?.name || 'Unknown User'}
                                 </span>
-                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
                                   {message.created_at ? formatDistanceToNow(new Date(message.created_at), { addSuffix: true }) : 'Unknown time'}
                                 </span>
                               </div>
                             )}
                             
                             {/* Message Bubble */}
-                            <div className={`relative inline-block p-3 rounded-2xl shadow-sm max-w-full ${
+                            <div className={`relative inline-block p-2.5 sm:p-3 rounded-xl sm:rounded-2xl shadow-sm max-w-full ${
                               message.user_id === user?.id
-                                ? 'bg-blue-500 text-white rounded-br-md ml-auto'
-                                : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600 rounded-bl-md'
+                                ? 'bg-blue-500 text-white rounded-br-md sm:rounded-br-md ml-auto'
+                                : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600 rounded-bl-md sm:rounded-bl-md'
                             }`}>
                               
                               {/* Edit/Delete Actions - Own messages or role-based permissions (exclude voice messages) */}
@@ -1339,7 +1391,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                             
                             {/* Timestamp for own messages */}
                             {message.user_id === user?.id && editingMessageId !== message.id && (
-                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
+                              <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
                                 {message.created_at ? formatDistanceToNow(new Date(message.created_at), { addSuffix: true }) : 'Unknown time'}
                               </div>
                             )}
@@ -1350,10 +1402,10 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                   );
                 })}
                 
-                {/* Typing Indicators - Less intrusive design */}
+                {/* Typing Indicators - Responsive */}
                 {typingUsers.length > 0 && (
-                  <div className="mb-3">
-                    <div className="flex items-center space-x-2">
+                  <div className="mb-2 sm:mb-3">
+                    <div className="flex items-center space-x-1.5 sm:space-x-2">
                       <div className="flex -space-x-1">
                         {typingUsers.slice(0, 2).map((user, index) => (
                           <Avatar 
@@ -1361,14 +1413,14 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                             user={user}
                             size="xs"
                             showBorder={true}
-                            className="border-2 border-white dark:border-gray-800"
+                            className="border-2 border-white dark:border-gray-800 w-5 h-5 sm:w-6 sm:h-6"
                           />
                         ))}
                       </div>
                       
-                      <div className="bg-gray-50 dark:bg-gray-800 rounded-full px-3 py-1.5 border border-gray-200 dark:border-gray-700">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                      <div className="bg-gray-50 dark:bg-gray-800 rounded-full px-2 sm:px-3 py-1 sm:py-1.5 border border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center space-x-1.5 sm:space-x-2">
+                          <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium truncate max-w-[100px] sm:max-w-none">
                             {typingUsers.length === 1 
                               ? `${typingUsers[0].name}`
                               : typingUsers.length === 2
@@ -1388,14 +1440,288 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                 )}
                 
                 {/* Enhanced scroll target with minimal space */}
-                <div ref={messagesEndRef} className="h-8 w-full" />
+                <div ref={messagesEndRef} className="h-4 w-full" />
               </>
             )}
           </div>
+
+          {/* Main Input Area - Responsive - Fixed at bottom of chat container */}
+          {(isMember || isOwner) && (
+            <div className="p-2 sm:p-3 md:p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
+              <div className="max-w-4xl mx-auto">
+                {/* Voice Recording Preview - WhatsApp Style */}
+                {recordedAudio && (
+                  <div className="mb-3 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-3 sm:p-4 rounded-xl border border-green-200 dark:border-green-700">
+                    <div className="flex items-center space-x-2 sm:space-x-3">
+                      <button
+                        onClick={() => {
+                          const audioElement = document.getElementById('preview-audio');
+                          if (audioElement) {
+                            if (audioElement.paused) {
+                              audioElement.play();
+                            } else {
+                              audioElement.pause();
+                            }
+                          }
+                        }}
+                        className="w-8 h-8 sm:w-10 sm:h-10 bg-green-500 hover:bg-green-600 text-white rounded-full flex items-center justify-center transition-all duration-200 flex-shrink-0 touch-manipulation"
+                      >
+                        <div className="w-0 h-0 border-l-[4px] sm:border-l-[6px] border-t-[3px] sm:border-t-[4px] border-b-[3px] sm:border-b-[4px] border-t-transparent border-b-transparent ml-0.5 border-l-white"></div>
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs sm:text-sm text-green-600 dark:text-green-400 truncate">
+                          Voice message • {formatRecordingTime(recordingTime)}
+        </div>
+                      </div>
+                      <div className="flex items-center space-x-1 sm:space-x-2">
+                        <button
+                          onClick={sendVoiceMessage}
+                          disabled={isUploading}
+                          className="w-8 h-8 sm:w-10 sm:h-10 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white rounded-full flex items-center justify-center transition-all duration-200 flex-shrink-0 touch-manipulation"
+                          title="Send voice message"
+                        >
+                          {isUploading ? (
+                            <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-2 border-white border-t-transparent"></div>
+                          ) : (
+                            <PaperAirplaneIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                          )}
+                        </button>
+                        <button
+                          onClick={cancelRecording}
+                          className="w-8 h-8 sm:w-10 sm:h-10 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full flex items-center justify-center transition-all duration-200 flex-shrink-0 touch-manipulation"
+                          title="Cancel voice message"
+                        >
+                          <XMarkIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                        </button>
+                      </div>
+                      <audio
+                        id="preview-audio"
+                        className="hidden"
+                        src={URL.createObjectURL(recordedAudio)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Active Recording Indicator */}
+                {isRecording && (
+                  <div className="mb-3 bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 p-3 rounded-xl border border-red-200 dark:border-red-700">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2 sm:space-x-3">
+                        <div className="w-2 h-2 sm:w-3 sm:h-3 bg-red-500 rounded-full animate-pulse"></div>
+                        <span className="text-xs sm:text-sm font-medium text-red-600 dark:text-red-400">Recording</span>
+                        <span className="text-xs sm:text-sm font-mono text-gray-600 dark:text-gray-400">
+                          {formatRecordingTime(recordingTime)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={stopRecording}
+                        className="px-3 py-1.5 sm:px-4 sm:py-2 bg-red-500 hover:bg-red-600 text-white text-xs sm:text-sm font-medium rounded-full transition-all duration-200 touch-manipulation"
+                      >
+                        Stop
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* File Preview Area */}
+                {selectedFiles.length > 0 && (
+                  <div className="mb-3 bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">
+                        {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected
+                      </h3>
+                      <button
+                        onClick={cancelFileSelection}
+                        className="text-gray-400 hover:text-red-500 transition-colors touch-manipulation"
+                        title="Cancel"
+                      >
+                        <XMarkIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {selectedFiles.map((file, index) => (
+                        <div key={index} className="relative">
+                          {file.type.startsWith('image/') ? (
+                            <img
+                              src={URL.createObjectURL(file)}
+                              alt={`Preview ${index + 1}`}
+                              className="w-full h-20 sm:h-24 object-cover rounded-lg"
+                            />
+                          ) : (
+                            <div className="w-full h-20 sm:h-24 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                              <DocumentIcon className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Input Controls */}
+                <div className="flex items-end space-x-2 sm:space-x-3">
+                  {/* Text Input */}
+                  <div className="flex-1 relative min-w-0">
+                    <div className="bg-gray-50 dark:bg-gray-700 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-600 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-opacity-20 transition-all duration-200">
+                      <textarea
+                        ref={inputRef}
+                        value={newMessage}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setNewMessage(value);
+                          e.target.style.height = 'auto';
+                          e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                          handleTypingIndicator(value);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendMessage(e);
+                          }
+                        }}
+                        placeholder="Type a message..."
+                        className="w-full px-3 py-2 sm:px-4 sm:py-3 pr-12 sm:pr-16 bg-transparent text-sm sm:text-base text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 border-0 resize-none focus:outline-none focus:ring-0"
+                        rows={1}
+                        style={{ 
+                          minHeight: '40px', 
+                          maxHeight: '120px',
+                          lineHeight: '1.5'
+                        }}
+                        disabled={isUploading || isRecording || recordedAudio}
+                      />
+                      
+                      {/* Input Controls */}
+                      <div className="absolute right-1.5 sm:right-2 bottom-1.5 sm:bottom-2 flex items-center space-x-0.5 sm:space-x-1">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          multiple
+                          accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.rtf"
+                          onChange={handleFileSelect}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="p-1.5 sm:p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-600 transition-all duration-200 touch-manipulation"
+                          disabled={isUploading || isRecording || recordedAudio || selectedFiles.length > 0}
+                          title="Attach file"
+                          aria-label="Attach file"
+                        >
+                          <PaperClipIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          className="p-1.5 sm:p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-600 transition-all duration-200 touch-manipulation"
+                          disabled={isUploading || isRecording || recordedAudio || selectedFiles.length > 0}
+                          title="Add emoji"
+                          aria-label="Add emoji"
+                        >
+                          <FaceSmileIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Voice/Send Button */}
+                  {!newMessage.trim() && !recordedAudio ? (
+                    <button
+                      type="button"
+                      onClick={isRecording ? stopRecording : startRecording}
+                      className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0 touch-manipulation ${
+                        isRecording 
+                          ? 'bg-red-500 text-white shadow-lg scale-110 animate-pulse' 
+                          : 'bg-green-500 hover:bg-green-600 active:bg-green-700 text-white shadow-md hover:shadow-lg hover:scale-110 active:scale-95'
+                      }`}
+                      disabled={isUploading || recordedAudio}
+                      title={isRecording ? 'Stop recording' : 'Record voice message'}
+                      aria-label={isRecording ? 'Stop recording' : 'Record voice message'}
+                    >
+                      {isRecording ? (
+                        <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-white rounded-sm"></div>
+                      ) : (
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </button>
+                  ) : newMessage.trim() ? (
+                    <button
+                      type="button"
+                      onClick={handleSendMessage}
+                      className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 shadow-md hover:shadow-lg flex-shrink-0 touch-manipulation"
+                      title="Send message"
+                      aria-label="Send message"
+                    >
+                      <PaperAirplaneIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Room Members Sidebar - Clickable */}
-        <div className="w-64 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+        {/* Room Members Sidebar - Responsive */}
+        {/* Mobile: Overlay sidebar */}
+        {isMobile && showSidebar && (
+          <>
+            <div
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 md:hidden"
+              onClick={() => setShowSidebar(false)}
+              aria-hidden="true"
+            />
+            <div className="fixed right-0 top-0 bottom-0 w-[280px] max-w-[85vw] bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 z-50 md:hidden shadow-2xl overflow-y-auto custom-scrollbar">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Members</h3>
+                <button
+                  onClick={() => setShowSidebar(false)}
+                  className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors touch-manipulation"
+                  aria-label="Close sidebar"
+                >
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-4">
+                <button 
+                  onClick={() => {
+                    setShowSidebar(false);
+                    setShowMembersModal(true);
+                  }}
+                  className="w-full p-4 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-left mb-4 touch-manipulation"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center">
+                      <UsersIcon className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white">
+                        All Members
+                      </h4>
+                      <p className="text-xs text-blue-600 dark:text-blue-400">
+                        Click to view
+                      </p>
+                    </div>
+                  </div>
+                </button>
+                
+                <OnlineMembers 
+                  room={room} 
+                  user={user}
+                  onMemberClick={(member) => {
+                    setShowSidebar(false);
+                    setSelectedUserProfile(member);
+                    setShowUserProfileModal(true);
+                  }}
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Desktop: Always visible sidebar */}
+        <div className="hidden md:flex md:w-64 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex-col flex-shrink-0">
           <button 
             onClick={() => setShowMembersModal(true)}
             className="w-full p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left"
@@ -1427,322 +1753,6 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
         </div>
       </div>
 
-      {/* WhatsApp-Style Input Area */}
-      {(isMember || isOwner) && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-lg z-50">
-          
-          {/* Voice Recording Preview - WhatsApp Style */}
-          {recordedAudio && (
-            <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-4 border-b border-gray-200 dark:border-gray-700">
-              <div className="max-w-4xl mx-auto">
-                <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-green-200 dark:border-green-700">
-                  <div className="flex items-center space-x-3">
-                    {/* Voice Message Preview */}
-                    <div className="flex items-center space-x-3 flex-1 min-w-[220px] bg-green-50 dark:bg-green-900/20 rounded-xl p-3">
-                      {/* Play/Pause Button */}
-                      <button
-                        onClick={() => {
-                          const audioElement = document.getElementById('preview-audio');
-                          if (audioElement) {
-                            if (audioElement.paused) {
-                              audioElement.play();
-                            } else {
-                              audioElement.pause();
-                            }
-                          }
-                        }}
-                        className="w-10 h-10 bg-green-500 hover:bg-green-600 text-white rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
-                      >
-                        <div className="w-0 h-0 border-l-[6px] border-t-[4px] border-b-[4px] border-t-transparent border-b-transparent ml-0.5 border-l-white"></div>
-                      </button>
-
-                      {/* Waveform Preview */}
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-0.5 mb-1">
-                          {generateWaveform(20).map((height, index) => (
-                            <div
-                              key={index}
-                              className="w-1 bg-green-500 rounded-full"
-                              style={{ height: `${height * 12 + 4}px` }}
-                            />
-                          ))}
-                        </div>
-                        <div className="text-xs text-green-600 dark:text-green-400">
-                          Voice message • {formatRecordingTime(recordingTime)}
-                        </div>
-                      </div>
-
-                      {/* Hidden audio for preview */}
-                      <audio
-                        id="preview-audio"
-                        className="hidden"
-                        src={URL.createObjectURL(recordedAudio)}
-                      />
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex items-center space-x-2">
-                      {/* Send Voice Message */}
-                      <button
-                        onClick={sendVoiceMessage}
-                        disabled={isUploading}
-                        className="w-12 h-12 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
-                        title="Send voice message"
-                      >
-                        {isUploading ? (
-                          <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                        ) : (
-                          <PaperAirplaneIcon className="w-5 h-5" />
-                        )}
-                      </button>
-
-                      {/* Cancel Voice Message */}
-                      <button
-                        onClick={cancelRecording}
-                        className="w-10 h-10 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full flex items-center justify-center transition-all duration-200"
-                        title="Cancel voice message"
-                      >
-                        <XMarkIcon className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Active Recording Indicator - WhatsApp Style */}
-          {isRecording && (
-            <div className="bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 p-3 border-b border-gray-200 dark:border-gray-700">
-              <div className="max-w-4xl mx-auto">
-                <div className="bg-white dark:bg-gray-800 rounded-2xl p-3 shadow-sm border border-red-200 dark:border-red-700">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      {/* Recording Indicator */}
-                      <div className="flex items-center space-x-2">
-                        <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                        <span className="text-sm font-medium text-red-600 dark:text-red-400">Recording</span>
-                      </div>
-                      
-                      {/* Live Waveform Animation */}
-                      <div className="flex items-center space-x-1">
-                        {[...Array(8)].map((_, i) => (
-                          <div 
-                            key={i}
-                            className="w-1 bg-red-400 rounded-full animate-pulse"
-                            style={{
-                              height: `${Math.random() * 16 + 8}px`,
-                              animationDelay: `${i * 100}ms`
-                            }}
-                          ></div>
-                        ))}
-                      </div>
-                      
-                      {/* Timer */}
-                      <span className="text-sm font-mono text-gray-600 dark:text-gray-400">
-                        {formatRecordingTime(recordingTime)}
-                      </span>
-                    </div>
-                    
-                    {/* Stop Recording Button */}
-                    <button
-                      onClick={stopRecording}
-                      className="flex items-center space-x-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-full transition-all duration-200 transform hover:scale-105"
-                    >
-                      <div className="w-2 h-2 bg-white rounded-sm"></div>
-                      <span>Stop</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Main Input Area */}
-          <div className="p-4">
-            <div className="max-w-4xl mx-auto">
-              
-              {/* File Preview Area */}
-              {selectedFiles.length > 0 && (
-                <div className="mb-4 bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-medium text-gray-900 dark:text-white">
-                      Selected {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''}
-                    </h3>
-                    <button
-                      onClick={cancelFileSelection}
-                      className="text-gray-400 hover:text-red-500 transition-colors"
-                      title="Cancel"
-                    >
-                      <XMarkIcon className="w-5 h-5" />
-                    </button>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    {selectedFiles.map((file, index) => (
-                      <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-xl">
-                        {/* File Icon */}
-                        <div className="flex-shrink-0">
-                          {file.type.startsWith('image/') ? (
-                            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
-                              <PhotoIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                            </div>
-                          ) : file.type.startsWith('video/') ? (
-                            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
-                              <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M2 6a2 2 0 012-2h6l2 2h6a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                              </svg>
-                            </div>
-                          ) : (
-                            <div className="w-10 h-10 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
-                              <DocumentIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* File Info */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                            {file.name}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {(file.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {/* Send Files Button */}
-                  <div className="flex justify-end mt-4">
-                    <button
-                      onClick={sendSelectedFiles}
-                      disabled={isUploading}
-                      className="flex items-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white text-sm font-medium rounded-xl transition-all duration-200"
-                    >
-                      {isUploading ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                      ) : (
-                        <PaperAirplaneIcon className="w-4 h-4" />
-                      )}
-                      <span>Send {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-              
-              <div className="flex items-end space-x-3">
-                
-                {/* Text Input */}
-                <div className="flex-1 relative">
-                  <div className="bg-gray-50 dark:bg-gray-700 rounded-2xl border border-gray-200 dark:border-gray-600 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-opacity-20 transition-all duration-200">
-                    <textarea
-                      ref={inputRef}
-                      value={newMessage}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setNewMessage(value);
-                        
-                        // Auto-resize textarea
-                        e.target.style.height = 'auto';
-                        e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
-                        
-                        // Handle typing indicator with debounced logic
-                        handleTypingIndicator(value);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSendMessage(e);
-                        }
-                      }}
-                      placeholder="Type a message..."
-                      className="w-full px-4 py-3 pr-16 bg-transparent text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 border-0 resize-none focus:outline-none focus:ring-0"
-                      rows={1}
-                      style={{ 
-                        minHeight: '48px', 
-                        maxHeight: '120px',
-                        lineHeight: '1.5'
-                      }}
-                      disabled={isUploading || isRecording || recordedAudio}
-                    />
-                    
-                    {/* Input Controls */}
-                    <div className="absolute right-2 bottom-2 flex items-center space-x-1">
-                      
-                      {/* Hidden File Input */}
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.rtf"
-                        onChange={handleFileSelect}
-                        className="hidden"
-                      />
-                      
-                      {/* File Upload Button */}
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-600 transition-all duration-200"
-                        disabled={isUploading || isRecording || recordedAudio || selectedFiles.length > 0}
-                        title="Attach file"
-                      >
-                        <PaperClipIcon className="w-4 h-4" />
-                      </button>
-                      
-                      {/* Emoji Button */}
-                      <button
-                        type="button"
-                        className="p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-600 transition-all duration-200"
-                        disabled={isUploading || isRecording || recordedAudio || selectedFiles.length > 0}
-                        title="Add emoji"
-                      >
-                        <FaceSmileIcon className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Voice/Send Button - WhatsApp Style */}
-                {!newMessage.trim() && !recordedAudio ? (
-                  // Large Voice Button (when no text)
-                  <button
-                    type="button"
-                    onClick={isRecording ? stopRecording : startRecording}
-                    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 ${
-                      isRecording 
-                        ? 'bg-red-500 text-white shadow-lg scale-110 animate-pulse' 
-                        : 'bg-green-500 hover:bg-green-600 text-white shadow-md hover:shadow-lg hover:scale-110'
-                    }`}
-                    disabled={isUploading || recordedAudio}
-                    title={isRecording ? 'Stop recording' : 'Record voice message'}
-                  >
-                    {isRecording ? (
-                      <div className="w-3 h-3 bg-white rounded-sm"></div>
-                    ) : (
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </button>
-                ) : newMessage.trim() ? (
-                  // Send Text Button
-                  <button
-                    type="button"
-                    onClick={handleSendMessage}
-                    className="w-12 h-12 bg-blue-500 hover:bg-blue-600 text-white rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 shadow-md hover:shadow-lg"
-                    title="Send message"
-                  >
-                    <PaperAirplaneIcon className="w-5 h-5" />
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
       {/* Image Modal */}
       <ImageModal
         isOpen={imageModalOpen && !!viewingImage}

@@ -58,13 +58,22 @@ const RoomPage = React.memo(() => {
   const [notification, setNotification] = useState(null);
   const [showMembersModal, setShowMembersModal] = useState(false);
 
-  // Handle tab change and save to localStorage
+  // Handle tab change and save to localStorage - Prevent scroll jump
   const handleTabChange = (tabId) => {
+    // Store current scroll position
+    const scrollY = window.scrollY;
+    
+    // Change tab
     setActiveTab(tabId);
     if (roomId) {
       localStorage.setItem(`room_${roomId}_activeTab`, tabId);
       if (process.env.NODE_ENV === 'development') {}
     }
+    
+    // Restore scroll position to prevent jump
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollY);
+    });
   };
 
   // Load saved tab when roomId changes
@@ -630,8 +639,8 @@ const RoomPage = React.memo(() => {
         disabled={!isMember && !isOwner}
       />
 
-      {/* Tab Content */}
-      <div className="max-w-7xl mx-auto">
+      {/* Tab Content - Responsive */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6">
         {!isMember && !isOwner ? (
           <div className="p-8 text-center">
             <LockClosedIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />

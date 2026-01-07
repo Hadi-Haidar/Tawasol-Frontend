@@ -18,26 +18,29 @@ import {
 } from 'lucide-react';
 import Avatar from '../common/Avatar';
 
-const TopNavbar = ({ onMobileMenuToggle, isMobileMenuOpen }) => {
+const TopNavbar = ({ onMobileMenuToggle, isMobileMenuOpen, isMobile }) => {
   const { user, logout } = useAuth();
   const { isDarkMode, toggleTheme } = useTheme();
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const notificationRef = useRef(null);
+  const userMenuRef = useRef(null);
 
-  // Close notification dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target)) {
         setShowNotifications(false);
       }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setShowUserMenu(false);
+      }
     };
 
-    if (showNotifications) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [showNotifications]);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleNotificationClick = async (notification) => {
     try {
@@ -77,24 +80,36 @@ const TopNavbar = ({ onMobileMenuToggle, isMobileMenuOpen }) => {
   };
 
   return (
-    <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 h-16 flex items-center justify-between px-4 lg:px-6">
-      {/* Left side - Mobile menu button */}
-      <div className="flex items-center space-x-4">
+    <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 h-16 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30">
+      {/* Left side - Mobile menu button and Logo */}
+      <div className="flex items-center gap-4">
         {/* Mobile menu button */}
-        <button
-          onClick={onMobileMenuToggle}
-          className="lg:hidden p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
-        >
-          <Menu size={20} />
-        </button>
+        {isMobile && (
+          <button
+            onClick={onMobileMenuToggle}
+            className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 active:bg-gray-200 dark:active:bg-gray-600 transition-all duration-200 touch-manipulation"
+            aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={isMobileMenuOpen}
+          >
+            {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        )}
+        
+        {/* Mobile Logo */}
+        {isMobile && (
+          <h1 className="text-lg font-bold bg-gradient-to-r from-primary-600 to-primary-500 dark:from-primary-400 dark:to-primary-300 bg-clip-text text-transparent">
+            Tawasol
+          </h1>
+        )}
       </div>
 
       {/* Right side - Actions and user menu */}
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center gap-2">
         {/* Theme toggle */}
         <button
           onClick={toggleTheme}
-          className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
+          className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 active:bg-gray-200 dark:active:bg-gray-600 transition-all duration-200 touch-manipulation"
+          aria-label="Toggle theme"
         >
           {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
@@ -103,11 +118,13 @@ const TopNavbar = ({ onMobileMenuToggle, isMobileMenuOpen }) => {
         <div className="relative" ref={notificationRef}>
           <button 
             onClick={() => setShowNotifications(!showNotifications)}
-            className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 relative"
+            className="p-2 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 active:bg-gray-200 dark:active:bg-gray-600 transition-all duration-200 relative touch-manipulation"
+            aria-label="Notifications"
+            aria-expanded={showNotifications}
           >
             <Bell size={20} />
             {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[20px] h-5 px-1 flex items-center justify-center font-medium">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
@@ -115,7 +132,7 @@ const TopNavbar = ({ onMobileMenuToggle, isMobileMenuOpen }) => {
 
           {/* Notification Dropdown */}
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-hidden">
+            <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-hidden animate-fadeIn">
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Notifications</h3>
@@ -227,55 +244,74 @@ const TopNavbar = ({ onMobileMenuToggle, isMobileMenuOpen }) => {
         </div>
 
         {/* User dropdown */}
-        <div className="relative group">
-          <button className="flex items-center space-x-3 p-3 rounded-xl text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-300 hover:shadow-sm">
-            <Avatar user={user} size="md" />
-            <div className="hidden md:block text-left">
-              <p className="text-sm font-semibold text-gray-900 dark:text-white leading-tight">{user?.name || 'User'}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 leading-tight mt-0.5">{user?.email}</p>
-            </div>
+        <div className="relative" ref={userMenuRef}>
+          <button 
+            onClick={() => setShowUserMenu(!showUserMenu)}
+            className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 active:bg-gray-200 dark:active:bg-gray-600 transition-all duration-200 touch-manipulation"
+            aria-label="User menu"
+            aria-expanded={showUserMenu}
+          >
+            <Avatar user={user} size="sm" />
+            {!isMobile && (
+              <div className="hidden sm:block text-left">
+                <p className="text-sm font-semibold text-gray-900 dark:text-white leading-tight max-w-[120px] truncate">
+                  {user?.name || 'User'}
+                </p>
+              </div>
+            )}
           </button>
 
           {/* Dropdown menu */}
-          <div className="absolute right-0 mt-3 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-            <div className="py-2">
-              <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex items-center space-x-3">
-                  <Avatar user={user} size="lg" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{user?.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
+          {showUserMenu && (
+            <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 animate-fadeIn">
+              <div className="py-2">
+                <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center gap-3">
+                    <Avatar user={user} size="md" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{user?.name}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user?.email}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-              
-              <div className="py-1">
-                <a href="/user/profile" className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                  <User className="w-4 h-4 mr-3" />
-                  Profile
-                </a>
-                <a href="/user/subscription-payment" className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                  <Settings className="w-4 h-4 mr-3" />
-                  Settings
-                </a>
-              </div>
-              
-              <div className="border-t border-gray-200 dark:border-gray-700 py-1">
-                <button
-                  onClick={async () => {
-                    try {
-                      await logout();
-                    } catch (error) {
-                      console.error('Logout error:', error);
-                    }
-                  }}
-                  className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                >
-                  Sign out
-                </button>
+                
+                <div className="py-1">
+                  <a 
+                    href="/user/profile" 
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 dark:active:bg-gray-600 transition-colors touch-manipulation"
+                  >
+                    <User className="w-4 h-4 mr-3" />
+                    Profile
+                  </a>
+                  <a 
+                    href="/user/subscription-payment"
+                    onClick={() => setShowUserMenu(false)}
+                    className="flex items-center px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 dark:active:bg-gray-600 transition-colors touch-manipulation"
+                  >
+                    <Settings className="w-4 h-4 mr-3" />
+                    Settings
+                  </a>
+                </div>
+                
+                <div className="border-t border-gray-200 dark:border-gray-700 py-1">
+                  <button
+                    onClick={async () => {
+                      try {
+                        setShowUserMenu(false);
+                        await logout();
+                      } catch (error) {
+                        console.error('Logout error:', error);
+                      }
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-red-50 dark:active:bg-red-900/20 transition-colors touch-manipulation"
+                  >
+                    Sign out
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </header>

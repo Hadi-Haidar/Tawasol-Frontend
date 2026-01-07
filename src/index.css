@@ -41,6 +41,35 @@
   }
 }
 
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translate3d(-100%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes fadeInBackdrop {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .animate-slideInRight {
   animation: slideInRight 0.3s ease-out forwards;
   will-change: transform, opacity;
@@ -63,6 +92,20 @@
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
+.animate-fadeIn {
+  animation: fadeInBackdrop 0.25s ease-in-out forwards;
+  will-change: opacity;
+}
+
+.animate-slideInLeft {
+  animation: slideInLeft 0.25s ease-in-out forwards;
+  will-change: transform;
+}
+
+.duration-250 {
+  transition-duration: 250ms;
+}
+
 @layer base {
 body {
   margin: 0;
@@ -73,6 +116,8 @@ body {
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* Prevent overscroll bounce on iOS */
+  overscroll-behavior-y: none;
 }
 
 /* Backdrop filter support with webkit prefix */
@@ -89,11 +134,11 @@ body {
 
 @layer components {
   .btn-primary {
-    @apply bg-primary-500 hover:bg-primary-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+    @apply bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow;
   }
   
   .btn-secondary {
-    @apply bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+    @apply bg-gray-200 hover:bg-gray-300 active:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 dark:active:bg-gray-500 text-gray-800 dark:text-gray-200 font-medium py-2 px-4 rounded-lg transition-all duration-200;
   }
 }
 
@@ -120,7 +165,7 @@ body {
     overflow: hidden;
   }
 
-  /* Custom scrollbar for chat messages */
+  /* Custom scrollbar for navigation and content */
   .custom-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: rgb(156 163 175) transparent;
@@ -141,6 +186,18 @@ body {
   
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background-color: rgb(107 114 128);
+  }
+
+  /* Touch manipulation for better mobile performance */
+  .touch-manipulation {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Prevent text selection on buttons */
+  button, .btn-primary, .btn-secondary {
+    user-select: none;
+    -webkit-user-select: none;
   }
 
   /* Hide browser's native password reveal button */

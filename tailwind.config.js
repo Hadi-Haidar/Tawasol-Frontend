@@ -19,6 +19,18 @@ module.exports = {
           900: '#1e3a8a',
         }
       },
+      height: {
+        'screen-dvh': '100dvh',
+        'screen-safe': '100dvh',
+      },
+      minHeight: {
+        'screen-dvh': '100dvh',
+        'screen-safe': '100dvh',
+      },
+      maxHeight: {
+        'screen-dvh': '100dvh',
+        'screen-safe': '100dvh',
+      },
       animation: {
         'fadeInScale': 'fadeInScale 0.3s ease-out',
       },
