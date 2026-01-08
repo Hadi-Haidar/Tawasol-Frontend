@@ -57,8 +57,8 @@ const UserProfileModal = ({ user, isOpen, onClose, currentUser, room }) => {
                   size="2xl" 
                   showBorder={true}
                 />
-                {/* Online indicator */}
-                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 border-4 border-white rounded-full"></div>
+                {/* Online indicator - Design Only */}
+                <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-gray-400 border-4 border-white rounded-full"></div>
               </div>
               
               <h2 className="text-2xl font-bold text-white mb-2">
@@ -114,11 +114,12 @@ const UserProfileModal = ({ user, isOpen, onClose, currentUser, room }) => {
                 Status
               </h3>
               
-              <div className="flex items-center space-x-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+              {/* Online Status - Design Only */}
+              <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
                 <div>
-                  <p className="text-sm font-medium text-green-800 dark:text-green-200">Online</p>
-                  <p className="text-xs text-green-600 dark:text-green-400">Currently active in this room</p>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Status</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-500">Member of this room</p>
                 </div>
               </div>
             </div>

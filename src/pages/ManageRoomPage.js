@@ -241,73 +241,90 @@ const ManageRoomPage = () => {
         </div>
       )}
 
-      {/* Header */}
+      {/* Header - Responsive */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6">
+          {/* Mobile: Stacked Layout */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            {/* Left Section: Back + Room Info */}
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
               <button
                 onClick={() => navigate(`/user/rooms/${roomId}`)}
-                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                className="flex-shrink-0 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors touch-manipulation"
+                aria-label="Back to room"
               >
-                <ArrowLeftIcon className="w-6 h-6" />
+                <ArrowLeftIcon className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
               
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+                {/* Room Avatar/Icon */}
                 {room.image_url ? (
                   <img 
                     src={room.image_url} 
                     alt={room.name}
-                    className="w-12 h-12 rounded-lg object-cover"
+                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover flex-shrink-0"
                   />
                 ) : (
-                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                    <span className="text-white text-lg font-bold">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                    <span className="text-white text-base sm:text-lg font-bold">
                       {room.name.charAt(0).toUpperCase()}
                     </span>
                   </div>
                 )}
                 
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    Manage Room: {room.name}
+                {/* Room Title & Meta - Simplified */}
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 dark:text-white truncate">
+                    {room.name}
                   </h1>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    {members.length} members • {room.type} room
-                  </p>
+                  <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                    <span className="capitalize">{room.type}</span>
+                    {members.length > 0 && (
+                      <>
+                        <span>•</span>
+                        <span>{members.length} {members.length === 1 ? 'member' : 'members'}</span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
 
+            {/* Right Section: Edit Button */}
             <button
-                                onClick={() => navigate(`/user/rooms/${roomId}/edit`)}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              onClick={() => navigate(`/user/rooms/${roomId}/edit`)}
+              className="inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-colors touch-manipulation flex-shrink-0 min-h-[44px] sm:min-h-0"
             >
-              <PencilIcon className="w-4 h-4 mr-2" />
-              Edit Room
+              <PencilIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="text-sm sm:text-base font-medium">Edit Room</span>
             </button>
           </div>
 
-          {/* Tabs */}
-          <div className="mt-6">
+          {/* Tabs - Responsive */}
+          <div className="mt-4 sm:mt-6">
             <div className="border-b border-gray-200 dark:border-gray-700">
-              <nav className="-mb-px flex space-x-8">
+              <nav 
+                className="-mb-px flex gap-4 sm:gap-8 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                style={{
+                  WebkitOverflowScrolling: 'touch'
+                }}
+              >
                 {tabs.map((tab) => {
                   const Icon = tab.icon;
                   return (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                      className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 whitespace-nowrap flex-shrink-0 touch-manipulation ${
                         activeTab === tab.id
                           ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                       }`}
                     >
-                      <Icon className="w-4 h-4" />
+                      <Icon className="w-4 h-4 flex-shrink-0" />
                       <span>{tab.name}</span>
                       {tab.badge > 0 && (
-                        <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded-full">
+                        <span className="bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400 text-xs font-medium px-1.5 sm:px-2 py-0.5 rounded-full">
                           {tab.badge}
                         </span>
                       )}

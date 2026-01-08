@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeftIcon,
@@ -57,6 +57,8 @@ const RoomPage = React.memo(() => {
   const [leaveLoading, setLeaveLoading] = useState(false);
   const [notification, setNotification] = useState(null);
   const [showMembersModal, setShowMembersModal] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(64); // Default mobile height
+  const headerRef = useRef(null);
 
   // Handle tab change and save to localStorage - Prevent scroll jump
   const handleTabChange = (tabId) => {
@@ -99,7 +101,7 @@ const RoomPage = React.memo(() => {
         if (roomData.is_commercial) {
           validTabs.push('products');
         }
-        
+
         if (!validTabs.includes(savedTab)) {
           if (process.env.NODE_ENV === 'development') {}
           localStorage.removeItem(`room_${roomId}_activeTab`);
@@ -108,6 +110,85 @@ const RoomPage = React.memo(() => {
       }
     }
   }, [roomData, roomId]);
+
+  // Calculate header height dynamically for sticky positioning
+  useEffect(() => {
+    const updateHeaderHeight = () => {
+      if (headerRef.current) {
+        // Get header height (accessing offsetHeight also forces a reflow)
+        const height = headerRef.current.offsetHeight;
+        setHeaderHeight(height);
+      }
+    };
+
+    // Calculate immediately
+    updateHeaderHeight();
+
+    // Use requestAnimationFrame to ensure DOM is fully rendered
+    requestAnimationFrame(() => {
+      updateHeaderHeight();
+      // Double RAF for better accuracy
+      requestAnimationFrame(() => {
+        updateHeaderHeight();
+      });
+    });
+
+    // Recalculate on window resize
+    window.addEventListener('resize', updateHeaderHeight);
+    
+    // Use ResizeObserver for more accurate height tracking
+    let resizeObserver;
+    if (headerRef.current && window.ResizeObserver) {
+      resizeObserver = new ResizeObserver(() => {
+        updateHeaderHeight();
+      });
+      resizeObserver.observe(headerRef.current);
+    }
+
+    // Use MutationObserver to watch for DOM changes (like chat loading)
+    let mutationObserver;
+    if (headerRef.current && window.MutationObserver) {
+      mutationObserver = new MutationObserver(() => {
+        // Debounce the update
+        setTimeout(updateHeaderHeight, 10);
+      });
+      mutationObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style']
+      });
+    }
+
+    // Recalculate after delays to catch async content (especially chat loading)
+    const timeoutId1 = setTimeout(updateHeaderHeight, 50);
+    const timeoutId2 = setTimeout(updateHeaderHeight, 200);
+    const timeoutId3 = setTimeout(updateHeaderHeight, 500);
+    const timeoutId4 = setTimeout(updateHeaderHeight, 1000); // For slow chat loading
+    
+    // If chat tab is active, add extra delays for chat content loading
+    let chatTimeout1, chatTimeout2;
+    if (activeTab === 'chat') {
+      chatTimeout1 = setTimeout(updateHeaderHeight, 1500);
+      chatTimeout2 = setTimeout(updateHeaderHeight, 2500);
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateHeaderHeight);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
+      if (mutationObserver) {
+        mutationObserver.disconnect();
+      }
+      clearTimeout(timeoutId1);
+      clearTimeout(timeoutId2);
+      clearTimeout(timeoutId3);
+      clearTimeout(timeoutId4);
+      if (chatTimeout1) clearTimeout(chatTimeout1);
+      if (chatTimeout2) clearTimeout(chatTimeout2);
+    };
+  }, [roomData, loading, isMember, isOwner, activeTab]);
 
   useEffect(() => {
     if (user && roomData) {
@@ -508,35 +589,38 @@ const RoomPage = React.memo(() => {
         </div>
       )}
 
-      {/* Room Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+      {/* Room Header - Fully Responsive */}
+      <div ref={headerRef} className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
+          {/* Desktop Layout (≥1024px): Horizontal */}
+          <div className="hidden lg:flex items-center justify-between gap-4 py-4">
+            {/* Left Section: Back + Room Info */}
+            <div className="flex items-center gap-4 flex-1 min-w-0">
               {/* Back Button */}
               <button
                 onClick={() => navigate('/user/rooms')}
-                className="inline-flex items-center justify-center w-10 h-10 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
+                className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
+                aria-label="Back to rooms"
               >
                 <ArrowLeftIcon className="w-5 h-5" />
               </button>
 
               {/* Room Image/Icon */}
-              <div className="relative">
+              <div className="relative flex-shrink-0">
                 {roomData.image_url ? (
                   <img 
                     src={roomData.image_url} 
                     alt={roomData.name}
-                    className="w-16 h-16 rounded-lg object-cover"
+                    className="w-12 h-12 rounded-lg object-cover"
                     loading="eager"
                     decoding="sync"
                     fetchPriority="high"
-                    width="64"
-                    height="64"
+                    width="48"
+                    height="48"
                   />
                 ) : (
-                  <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                    <span className="text-white text-xl font-bold">
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                    <span className="text-white text-lg font-bold">
                       {roomData.name.charAt(0).toUpperCase()}
                     </span>
                   </div>
@@ -545,42 +629,47 @@ const RoomPage = React.memo(() => {
                 {/* Commercial Badge */}
                 {roomData.is_commercial && (
                   <div className="absolute -top-1 -right-1">
-                    <span className="inline-flex items-center w-6 h-6 rounded-full text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                      <ShoppingBagIcon className="w-4 h-4 mx-auto" />
+                    <span className="inline-flex items-center w-5 h-5 rounded-full text-[10px] bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                      <ShoppingBagIcon className="w-3 h-3 mx-auto" />
                     </span>
                   </div>
                 )}
               </div>
 
-              <div className="flex-1">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {roomData.name}
-                </h1>
-                <div className="flex items-center space-x-4 mt-1">
-                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getTypeBadgeColor()}`}>
+              {/* Room Title + Meta */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h1 className="text-xl font-bold text-gray-900 dark:text-white truncate">
+                    {roomData.name}
+                  </h1>
+                  
+                  {/* Visibility Badge */}
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${getTypeBadgeColor()}`}>
                     {getTypeIcon()}
-                    <span className="ml-1 capitalize">{roomData.type}</span>
+                    <span className="capitalize">{roomData.type}</span>
                   </span>
                   
+                  {/* Members Count */}
                   <button 
                     onClick={() => setShowMembersModal(true)}
-                    className="flex items-center text-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex-shrink-0"
                     title="View room members"
                   >
-                    <UsersIcon className="w-4 h-4 mr-1" />
+                    <UsersIcon className="w-4 h-4" />
                     <span>{roomData.members_count || roomData.members?.length || 0} members</span>
                   </button>
                 </div>
                 
                 {roomData.description && (
-                  <p className="mt-2 text-gray-600 dark:text-gray-400 text-sm">
+                  <p className="mt-1.5 text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
                     {roomData.description}
                   </p>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
+            {/* Right Section: Primary Action */}
+            <div className="flex items-center gap-3 flex-shrink-0">
               {/* Join/Manage Button */}
               {!isOwner && !isMember && (
                 <button
@@ -592,40 +681,153 @@ const RoomPage = React.memo(() => {
                     }
                   }}
                   disabled={joinLoading}
-                  className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors duration-200"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-lg transition-colors duration-200"
                 >
-                  <UserPlusIcon className="w-4 h-4 mr-2" />
-                  {joinLoading ? 'Joining...' : (roomData.type === 'private' ? 'Request to Join' : 'Join Room')}
+                  <UserPlusIcon className="w-4 h-4" />
+                  <span>{joinLoading ? 'Joining...' : (roomData.type === 'private' ? 'Request to Join' : 'Join Room')}</span>
                 </button>
               )}
 
               {isMember && !isOwner && (
-                <div className="relative">
-                  <div className="inline-flex items-center">
-                    <div className="inline-flex items-center px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-medium rounded-l-lg">
-                      <CheckCircleIcon className="w-4 h-4 mr-2" />
-                      Member
-                    </div>
-                    <button
-                      onClick={() => setShowLeaveConfirm(true)}
-                      className="inline-flex items-center px-3 py-2 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-700 dark:text-red-400 font-medium rounded-r-lg border-l border-red-200 dark:border-red-800 transition-colors duration-200"
-                      title="Leave Room"
-                    >
-                      Leave
-                    </button>
+                <div className="inline-flex items-center rounded-lg overflow-hidden border border-green-200 dark:border-green-800">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-sm font-medium">
+                    <CheckCircleIcon className="w-4 h-4" />
+                    <span>Member</span>
                   </div>
+                  <button
+                    onClick={() => setShowLeaveConfirm(true)}
+                    className="inline-flex items-center px-4 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 text-red-700 dark:text-red-400 text-sm font-medium transition-colors duration-200 border-l border-red-200 dark:border-red-800"
+                    title="Leave Room"
+                  >
+                    Leave
+                  </button>
                 </div>
               )}
 
               {isOwner && (
                 <button 
                   onClick={() => navigate(`/user/rooms/${roomId}/manage`)}
-                  className="inline-flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors duration-200"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-lg transition-colors duration-200 mr-2"
                 >
-                  <Cog6ToothIcon className="w-4 h-4 mr-2" />
-                  Manage Room
+                  <Cog6ToothIcon className="w-4 h-4" />
+                  <span>Manage Room</span>
                 </button>
               )}
+            </div>
+          </div>
+
+          {/* Mobile Layout (≤768px): Stacked */}
+          <div className="lg:hidden py-3 space-y-3">
+            {/* Top Row: Back + Title */}
+            <div className="flex items-center gap-3 min-w-0">
+              {/* Back Button */}
+              <button
+                onClick={() => navigate('/user/rooms')}
+                className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200 touch-manipulation"
+                aria-label="Back to rooms"
+              >
+                <ArrowLeftIcon className="w-5 h-5" />
+              </button>
+
+              {/* Room Image/Icon */}
+              <div className="relative flex-shrink-0">
+                {roomData.image_url ? (
+                  <img 
+                    src={roomData.image_url} 
+                    alt={roomData.name}
+                    className="w-10 h-10 rounded-lg object-cover"
+                    loading="eager"
+                    decoding="sync"
+                    fetchPriority="high"
+                    width="40"
+                    height="40"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                    <span className="text-white text-base font-bold">
+                      {roomData.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                )}
+                
+                {/* Commercial Badge */}
+                {roomData.is_commercial && (
+                  <div className="absolute -top-0.5 -right-0.5">
+                    <span className="inline-flex items-center w-4 h-4 rounded-full text-[8px] bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                      <ShoppingBagIcon className="w-2.5 h-2.5 mx-auto" />
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Room Title - Truncate if needed */}
+              <h1 className="text-lg font-bold text-gray-900 dark:text-white truncate flex-1 min-w-0">
+                {roomData.name}
+              </h1>
+
+              {/* Mobile Action Button - Compact Icon */}
+              {isOwner && (
+                <button 
+                  onClick={() => navigate(`/user/rooms/${roomId}/manage`)}
+                  className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors duration-200 touch-manipulation mr-2"
+                  aria-label="Manage Room"
+                  title="Manage Room"
+                >
+                  <Cog6ToothIcon className="w-5 h-5" />
+                </button>
+              )}
+
+              {!isOwner && !isMember && (
+                <button
+                  onClick={() => {
+                    if (roomData.type === 'secure') {
+                      setShowJoinForm(true);
+                    } else {
+                      handleJoinRoom();
+                    }
+                  }}
+                  disabled={joinLoading}
+                  className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors duration-200 touch-manipulation"
+                  aria-label={joinLoading ? 'Joining...' : 'Join Room'}
+                  title={joinLoading ? 'Joining...' : 'Join Room'}
+                >
+                  {joinLoading ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  ) : (
+                    <UserPlusIcon className="w-5 h-5" />
+                  )}
+                </button>
+              )}
+
+              {isMember && !isOwner && (
+                <button
+                  onClick={() => setShowLeaveConfirm(true)}
+                  className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg transition-colors duration-200 touch-manipulation"
+                  aria-label="Leave Room"
+                  title="Leave Room"
+                >
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+
+            {/* Second Row: Badge + Members Count */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Visibility Badge */}
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getTypeBadgeColor()}`}>
+                {getTypeIcon()}
+                <span className="capitalize">{roomData.type}</span>
+              </span>
+              
+              {/* Members Count */}
+              <button 
+                onClick={() => setShowMembersModal(true)}
+                className="inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors touch-manipulation"
+                title="View room members"
+              >
+                <UsersIcon className="w-3.5 h-3.5" />
+                <span>{roomData.members_count || roomData.members?.length || 0} members</span>
+              </button>
             </div>
           </div>
         </div>
@@ -637,6 +839,7 @@ const RoomPage = React.memo(() => {
         activeTab={activeTab}
         onTabChange={handleTabChange}
         disabled={!isMember && !isOwner}
+        headerHeight={headerHeight}
       />
 
       {/* Tab Content - Responsive */}

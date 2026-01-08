@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import authService from '../services/authService';
 import activityTracker from '../services/activityTracker';
-import onlineMembersApi from '../services/onlineMembersApi';
 import websocketService from '../services/websocket';
 
 const AuthContext = createContext();

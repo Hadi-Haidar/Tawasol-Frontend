@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   PaperAirplaneIcon,
   FaceSmileIcon,
@@ -20,6 +20,257 @@ import OnlineMembers from '../OnlineMembers';
 import UserProfileModal from '../UserProfileModal';
 import ImageModal from '../../common/ImageModal';
 import VoiceMessage from '../../audio/VoiceMessage';
+import { compressImage, generateThumbnail, needsCompression } from '../../../utils/imageCompression';
+
+// Lazy Image Component with IntersectionObserver for true lazy loading
+const LazyImage = React.memo(({ src, alt, className, onClick, style }) => {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isInView, setIsInView] = useState(false);
+  const imgRef = useRef(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setIsInView(true);
+            observer.disconnect();
+          }
+        });
+      },
+      { rootMargin: '50px' } // Start loading 50px before image enters viewport
+    );
+
+    if (imgRef.current) {
+      observer.observe(imgRef.current);
+    }
+
+    return () => {
+      if (imgRef.current) {
+        observer.disconnect();
+      }
+    };
+  }, []);
+
+  return (
+    <div ref={imgRef} style={style} className={className}>
+      {!isInView ? (
+        <div className="w-full h-full bg-gray-200 dark:bg-gray-700 animate-pulse flex items-center justify-center">
+          <PhotoIcon className="w-8 h-8 text-gray-400" />
+        </div>
+      ) : (
+        <img
+          src={src}
+          alt={alt}
+          className={className}
+          onClick={onClick}
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setIsLoaded(true)}
+          onError={(e) => {
+            e.target.style.display = 'none';
+          }}
+          style={{
+            ...style,
+            opacity: isLoaded ? 1 : 0,
+            transition: 'opacity 0.3s ease-in-out'
+          }}
+        />
+      )}
+    </div>
+  );
+});
+
+LazyImage.displayName = 'LazyImage';
+
+// Memoized Message Component to prevent unnecessary re-renders
+const MessageBubble = React.memo(({ 
+  message, 
+  user, 
+  userRole, 
+  room, 
+  hoveredMessageId, 
+  setHoveredMessageId,
+  editingMessageId,
+  editMessageText,
+  setEditMessageText,
+  editInputRef,
+  startEditMessage,
+  saveEditMessage,
+  cancelEditMessage,
+  canUserInteractWithMessage,
+  canUserDeleteMessage,
+  startDeleteMessage,
+  renderMessageContent,
+  openImageModal,
+  formatDistanceToNow
+}) => {
+  const cachedTime = useMemo(() => {
+    if (!message.created_at) return 'Unknown time';
+    return formatDistanceToNow(new Date(message.created_at), { addSuffix: true });
+  }, [message.created_at, message.id]);
+
+  return (
+    <div key={message.id} className="mb-4">
+      {message.type === 'system' ? (
+        <div className="text-center">
+          <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
+            {message.content || message.message || '[System message]'}
+          </span>
+        </div>
+      ) : (
+        <div 
+          className={`flex items-end space-x-2 sm:space-x-3 group ${
+            message.user_id === user?.id ? 'flex-row-reverse space-x-reverse' : ''
+          }`}
+          onMouseEnter={() => setHoveredMessageId(message.id)}
+          onMouseLeave={() => setHoveredMessageId(null)}
+        >
+          {/* Avatar */}
+          <div className="flex-shrink-0 mb-1">
+            <Avatar 
+              user={message.user}
+              size="sm"
+              showBorder={true}
+              className="w-7 h-7 sm:w-8 sm:h-8"
+            />
+          </div>
+
+          {/* Message Content */}
+          <div className={`flex-1 max-w-[75%] sm:max-w-xs md:max-w-sm lg:max-w-md relative ${
+            message.user_id === user?.id ? 'text-right' : ''
+          }`}>
+            {/* Show sender name and timestamp only for others */}
+            {message.user_id !== user?.id && (
+              <div className="flex items-baseline flex-wrap gap-1.5 sm:gap-2 mb-1">
+                <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">
+                  {message.user?.name || 'Unknown User'}
+                </span>
+                <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                  {cachedTime}
+                </span>
+              </div>
+            )}
+            
+            {/* Message Bubble */}
+            <div className={`relative inline-block p-2.5 sm:p-3 rounded-xl sm:rounded-2xl shadow-sm max-w-full ${
+              message.user_id === user?.id
+                ? 'bg-blue-500 text-white rounded-br-md sm:rounded-br-md ml-auto'
+                : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600 rounded-bl-md sm:rounded-bl-md'
+            }`}>
+              
+              {/* Edit/Delete Actions - Hidden for images (delete button is on image overlay) */}
+              {canUserInteractWithMessage(message, user, userRole, room) && 
+               hoveredMessageId === message.id && 
+               editingMessageId !== message.id &&
+               message.type !== 'voice' &&
+               message.type !== 'image' && ( // Hide for images - delete button is on image overlay
+                <div className={`absolute top-1 ${
+                  message.user_id === user?.id ? 'left-1' : 'right-1'
+                } flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
+                  {message.user_id === user?.id && message.type === 'text' && (
+                    <button
+                      onClick={() => startEditMessage(message)}
+                      className="w-6 h-6 sm:w-7 sm:h-7 bg-gray-800 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full flex items-center justify-center transition-all duration-200 touch-manipulation"
+                      title="Edit message"
+                    >
+                      <PencilIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                    </button>
+                  )}
+                  
+                  {canUserDeleteMessage(message, user, userRole, room) && (
+                    <button
+                      onClick={() => startDeleteMessage(message.id)}
+                      className="w-6 h-6 sm:w-7 sm:h-7 bg-red-500 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full flex items-center justify-center transition-all duration-200 touch-manipulation"
+                      title={`Delete ${message.type === 'text' ? 'message' : message.type === 'voice' ? 'voice message' : 'file'}${
+                        message.user_id !== user?.id ? ` (${userRole === 'owner' ? 'Owner' : 'Moderator'})` : ''
+                      }`}
+                    >
+                      <TrashIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Edit Mode */}
+              {editingMessageId === message.id ? (
+                <div className="space-y-2">
+                  <textarea
+                    ref={editInputRef}
+                    value={editMessageText}
+                    onChange={(e) => setEditMessageText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        saveEditMessage();
+                      } else if (e.key === 'Escape') {
+                        cancelEditMessage();
+                      }
+                    }}
+                    className="w-full p-2 text-sm bg-white dark:bg-gray-600 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-500 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows={1}
+                    style={{ minHeight: '36px' }}
+                  />
+                  <div className="flex justify-end space-x-2">
+                    <button
+                      onClick={cancelEditMessage}
+                      className="px-3 py-1 text-xs bg-gray-500 hover:bg-gray-600 text-white rounded-md transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={saveEditMessage}
+                      disabled={!editMessageText.trim()}
+                      className="px-3 py-1 text-xs bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white rounded-md transition-colors"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {renderMessageContent(message, {
+                    user,
+                    userRole,
+                    room,
+                    editingMessageId,
+                    canUserInteractWithMessage,
+                    canUserDeleteMessage,
+                    startDeleteMessage
+                  })}
+                  {message.is_edited && (
+                    <div className="text-xs opacity-60 mt-1">
+                      (edited)
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            
+            {/* Timestamp for own messages */}
+            {message.user_id === user?.id && editingMessageId !== message.id && (
+              <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
+                {cachedTime}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}, (prevProps, nextProps) => {
+  // Custom comparison function for React.memo
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.message === nextProps.message.message &&
+    prevProps.message.is_edited === nextProps.message.is_edited &&
+    prevProps.hoveredMessageId === nextProps.hoveredMessageId &&
+    prevProps.editingMessageId === nextProps.editingMessageId &&
+    prevProps.user?.id === nextProps.user?.id
+  );
+});
+
+MessageBubble.displayName = 'MessageBubble';
 
 const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   const [messages, setMessages] = useState([]);
@@ -126,6 +377,8 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   // File attachment states
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [filePreviewMode, setFilePreviewMode] = useState(null); // 'image', 'video', 'document'
+  const [compressingFiles, setCompressingFiles] = useState(false);
+  const [fileThumbnails, setFileThumbnails] = useState({}); // Store thumbnails for images
   
   // Image modal states for viewing images
   const [viewingImage, setViewingImage] = useState(null);
@@ -615,13 +868,67 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
     }
   };
 
-  // File attachment functions
-  const handleFileSelect = (event) => {
+  // File attachment functions with image compression
+  const handleFileSelect = async (event) => {
     const files = Array.from(event.target.files);
     if (files.length > 0) {
-      setSelectedFiles(files);
+      setCompressingFiles(true);
+      
+      try {
+        const processedFiles = [];
+        const thumbnails = {};
+        
+        // Process each file
+        for (const file of files) {
+          if (file.type.startsWith('image/')) {
+            // Compress image if needed
+            let processedFile = file;
+            if (needsCompression(file, 1)) { // Compress if > 1MB
+              try {
+                processedFile = await compressImage(file, {
+                  maxWidth: 1920,
+                  maxHeight: 1920,
+                  quality: 0.8,
+                  maxSizeMB: 1
+                });
+              } catch (error) {
+                console.error('Failed to compress image:', error);
+                processedFile = file; // Use original if compression fails
+              }
+            }
+            
+            // Generate thumbnail for preview
+            try {
+              const thumbnail = await generateThumbnail(processedFile, 200);
+              thumbnails[processedFile.name] = thumbnail;
+            } catch (error) {
+              console.error('Failed to generate thumbnail:', error);
+            }
+            
+            processedFiles.push(processedFile);
+          } else {
+            processedFiles.push(file);
+          }
+        }
+        
+        setSelectedFiles(processedFiles);
+        setFileThumbnails(thumbnails);
       
       // Determine preview mode based on file type
+        const firstFile = processedFiles[0];
+        if (firstFile.type.startsWith('image/')) {
+          setFilePreviewMode('image');
+        } else if (firstFile.type.startsWith('video/')) {
+          setFilePreviewMode('video');
+        } else if (firstFile.type.startsWith('audio/')) {
+          setFilePreviewMode('voice');
+        } else {
+          setFilePreviewMode('document');
+        }
+      } catch (error) {
+        console.error('Error processing files:', error);
+        // Fallback to original files
+        setSelectedFiles(files);
       const firstFile = files[0];
       if (firstFile.type.startsWith('image/')) {
         setFilePreviewMode('image');
@@ -630,8 +937,10 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
       } else if (firstFile.type.startsWith('audio/')) {
         setFilePreviewMode('voice');
       } else {
-        // Handle documents
         setFilePreviewMode('document');
+        }
+      } finally {
+        setCompressingFiles(false);
       }
     }
     
@@ -677,6 +986,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
       // Clear selected files
       setSelectedFiles([]);
       setFilePreviewMode(null);
+      setFileThumbnails({});
       
       // 📦 PERFORMANCE: Clear cache when sending files
       const cacheKey = `messages_room_${room.id}`;
@@ -703,6 +1013,8 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   const cancelFileSelection = () => {
     setSelectedFiles([]);
     setFilePreviewMode(null);
+    setFileThumbnails({});
+    setCompressingFiles(false);
     focusInputAfterSend(100);
   };
 
@@ -746,7 +1058,9 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
         }
       }
       
-      const response = await chatApiService.getMessages(room.id, pageNum);
+      // Request fewer messages for faster initial load (20 instead of default 50)
+      const perPage = pageNum === 1 ? 20 : 50; // First page: 20, subsequent pages: 50
+      const response = await chatApiService.getMessages(room.id, pageNum, perPage);
       const newMessages = response.data || [];
       
       // Filter out invalid messages
@@ -1126,7 +1440,17 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
     );
   }
 
-  const renderMessageContent = (message) => {
+  const renderMessageContent = (message, options = {}) => {
+    const {
+      user,
+      userRole,
+      room,
+      editingMessageId,
+      canUserInteractWithMessage,
+      canUserDeleteMessage,
+      startDeleteMessage
+    } = options;
+
     switch (message.type) {
       case 'text':
         return (
@@ -1138,12 +1462,38 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
       case 'image':
         return (
           <div className="space-y-2">
-            <img
+            {/* Optimized image with IntersectionObserver lazy loading */}
+            <div className="relative max-w-full group/image-container">
+              <LazyImage
               src={message.file_url}
               alt="Image"
               className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity object-cover"
               onClick={() => openImageModal(message.file_url)}
-            />
+                style={{
+                  backgroundColor: '#f3f4f6',
+                  minHeight: '200px',
+                  objectFit: 'cover'
+                }}
+              />
+              {/* Delete button overlay on image - Enhanced positioning for PC and mobile */}
+              {canUserInteractWithMessage && 
+               canUserDeleteMessage && 
+               canUserInteractWithMessage(message, user, userRole, room) && 
+               canUserDeleteMessage(message, user, userRole, room) && 
+               editingMessageId !== message.id && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation(); // Prevent opening image modal
+                    startDeleteMessage(message.id);
+                  }}
+                  className="absolute top-2 right-2 sm:top-3 sm:right-3 w-8 h-8 sm:w-9 sm:h-9 bg-red-500 hover:bg-red-600 active:bg-red-700 text-white rounded-full flex items-center justify-center transition-all duration-200 shadow-lg hover:shadow-xl opacity-90 hover:opacity-100 touch-manipulation z-10"
+                  title={`Delete image${message.user_id !== user?.id ? ` (${userRole === 'owner' ? 'Owner' : 'Moderator'})` : ''}`}
+                  aria-label="Delete image"
+                >
+                  <TrashIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
+              )}
+            </div>
             {message.message && !message.message.match(/^(image|video|document) file: .+\.(jpg|jpeg|png|gif|webp|mp4|avi|mov|pdf|doc|docx)$/i) && (
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 {message.message}
@@ -1253,8 +1603,38 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
               </div>
             ) : (
               <>
-                {/* Message bubbles will be rendered here */}
+                {/* Message bubbles - Optimized with React.memo */}
                 {messages.map((message) => {
+                  if (!message || !message.id) return null;
+                  
+                  return (
+                    <MessageBubble
+                      key={message.id}
+                      message={message}
+                      user={user}
+                      userRole={userRole}
+                      room={room}
+                      hoveredMessageId={hoveredMessageId}
+                      setHoveredMessageId={setHoveredMessageId}
+                      editingMessageId={editingMessageId}
+                      editMessageText={editMessageText}
+                      setEditMessageText={setEditMessageText}
+                      editInputRef={editInputRef}
+                      startEditMessage={startEditMessage}
+                      saveEditMessage={saveEditMessage}
+                      cancelEditMessage={cancelEditMessage}
+                      canUserInteractWithMessage={canUserInteractWithMessage}
+                      canUserDeleteMessage={canUserDeleteMessage}
+                      startDeleteMessage={startDeleteMessage}
+                      renderMessageContent={renderMessageContent}
+                      openImageModal={openImageModal}
+                      formatDistanceToNow={formatDistanceToNow}
+                    />
+                  );
+                })}
+                
+                {/* OLD CODE - REMOVED FOR PERFORMANCE */}
+                {false && messages.map((message) => {
                   if (!message || !message.id) {return null;
                   }
                   
@@ -1378,7 +1758,15 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                                 </div>
                               ) : (
                                 <>
-                                  {renderMessageContent(message)}
+                                  {renderMessageContent(message, {
+                    user,
+                    userRole,
+                    room,
+                    editingMessageId,
+                    canUserInteractWithMessage,
+                    canUserDeleteMessage,
+                    startDeleteMessage
+                  })}
                                   {/* Edited indicator */}
                                   {message.is_edited && (
                                     <div className="text-xs opacity-60 mt-1">
@@ -1392,7 +1780,13 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                             {/* Timestamp for own messages */}
                             {message.user_id === user?.id && editingMessageId !== message.id && (
                               <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
-                                {message.created_at ? formatDistanceToNow(new Date(message.created_at), { addSuffix: true }) : 'Unknown time'}
+                                {message.created_at ? (() => {
+                                  // Memoize timestamp calculation
+                                  if (!message._cachedTime) {
+                                    message._cachedTime = formatDistanceToNow(new Date(message.created_at), { addSuffix: true });
+                                  }
+                                  return message._cachedTime;
+                                })() : 'Unknown time'}
                               </div>
                             )}
                           </div>
@@ -1443,14 +1837,14 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                 <div ref={messagesEndRef} className="h-4 w-full" />
               </>
             )}
-          </div>
+        </div>
 
           {/* Main Input Area - Responsive - Fixed at bottom of chat container */}
-          {(isMember || isOwner) && (
+      {(isMember || isOwner) && (
             <div className="p-2 sm:p-3 md:p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
               <div className="max-w-4xl mx-auto">
-                {/* Voice Recording Preview - WhatsApp Style */}
-                {recordedAudio && (
+          {/* Voice Recording Preview - WhatsApp Style */}
+          {recordedAudio && (
                   <div className="mb-3 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-3 sm:p-4 rounded-xl border border-green-200 dark:border-green-700">
                     <div className="flex items-center space-x-2 sm:space-x-3">
                       <button
@@ -1471,195 +1865,237 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                       <div className="flex-1 min-w-0">
                         <div className="text-xs sm:text-sm text-green-600 dark:text-green-400 truncate">
                           Voice message • {formatRecordingTime(recordingTime)}
-        </div>
+                        </div>
                       </div>
                       <div className="flex items-center space-x-1 sm:space-x-2">
-                        <button
-                          onClick={sendVoiceMessage}
-                          disabled={isUploading}
+                      <button
+                        onClick={sendVoiceMessage}
+                        disabled={isUploading}
                           className="w-8 h-8 sm:w-10 sm:h-10 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white rounded-full flex items-center justify-center transition-all duration-200 flex-shrink-0 touch-manipulation"
-                          title="Send voice message"
-                        >
-                          {isUploading ? (
+                        title="Send voice message"
+                      >
+                        {isUploading ? (
                             <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-2 border-white border-t-transparent"></div>
-                          ) : (
+                        ) : (
                             <PaperAirplaneIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                          )}
-                        </button>
-                        <button
-                          onClick={cancelRecording}
+                        )}
+                      </button>
+                      <button
+                        onClick={cancelRecording}
                           className="w-8 h-8 sm:w-10 sm:h-10 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full flex items-center justify-center transition-all duration-200 flex-shrink-0 touch-manipulation"
-                          title="Cancel voice message"
-                        >
+                        title="Cancel voice message"
+                      >
                           <XMarkIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </button>
-                      </div>
+                      </button>
+                    </div>
                       <audio
                         id="preview-audio"
                         className="hidden"
                         src={URL.createObjectURL(recordedAudio)}
                       />
-                    </div>
-                  </div>
-                )}
+              </div>
+            </div>
+          )}
 
                 {/* Active Recording Indicator */}
-                {isRecording && (
+          {isRecording && (
                   <div className="mb-3 bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 p-3 rounded-xl border border-red-200 dark:border-red-700">
-                    <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2 sm:space-x-3">
                         <div className="w-2 h-2 sm:w-3 sm:h-3 bg-red-500 rounded-full animate-pulse"></div>
                         <span className="text-xs sm:text-sm font-medium text-red-600 dark:text-red-400">Recording</span>
                         <span className="text-xs sm:text-sm font-mono text-gray-600 dark:text-gray-400">
-                          {formatRecordingTime(recordingTime)}
-                        </span>
-                      </div>
-                      <button
-                        onClick={stopRecording}
-                        className="px-3 py-1.5 sm:px-4 sm:py-2 bg-red-500 hover:bg-red-600 text-white text-xs sm:text-sm font-medium rounded-full transition-all duration-200 touch-manipulation"
-                      >
-                        Stop
-                      </button>
+                        {formatRecordingTime(recordingTime)}
+                      </span>
                     </div>
-                  </div>
-                )}
-
-                {/* File Preview Area */}
-                {selectedFiles.length > 0 && (
+                    <button
+                      onClick={stopRecording}
+                        className="px-3 py-1.5 sm:px-4 sm:py-2 bg-red-500 hover:bg-red-600 text-white text-xs sm:text-sm font-medium rounded-full transition-all duration-200 touch-manipulation"
+                    >
+                        Stop
+                    </button>
+              </div>
+            </div>
+          )}
+              
+              {/* File Preview Area */}
+              {selectedFiles.length > 0 && (
                   <div className="mb-3 bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 shadow-sm border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">
-                        {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected
-                      </h3>
-                      <button
-                        onClick={cancelFileSelection}
-                        className="text-gray-400 hover:text-red-500 transition-colors touch-manipulation"
-                        title="Cancel"
-                      >
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">
+                          {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected
+                    </h3>
+                        {compressingFiles && (
+                          <div className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+                            <div className="animate-spin rounded-full h-3 w-3 border-2 border-blue-600 border-t-transparent"></div>
+                            <span>Compressing...</span>
+                          </div>
+                        )}
+                      </div>
+                    <button
+                      onClick={cancelFileSelection}
+                        className="text-gray-400 hover:text-red-500 transition-colors touch-manipulation disabled:opacity-50"
+                      title="Cancel"
+                        disabled={compressingFiles}
+                    >
                         <XMarkIcon className="w-4 h-4" />
-                      </button>
-                    </div>
+                    </button>
+                  </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                      {selectedFiles.map((file, index) => (
+                    {selectedFiles.map((file, index) => (
                         <div key={index} className="relative">
                           {file.type.startsWith('image/') ? (
-                            <img
-                              src={URL.createObjectURL(file)}
-                              alt={`Preview ${index + 1}`}
-                              className="w-full h-20 sm:h-24 object-cover rounded-lg"
-                            />
+                            <div className="relative w-full h-20 sm:h-24 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
+                              {fileThumbnails[file.name] ? (
+                                <img
+                                  src={fileThumbnails[file.name]}
+                                  alt={`Preview ${index + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <img
+                                  src={URL.createObjectURL(file)}
+                                  alt={`Preview ${index + 1}`}
+                                  className="w-full h-full object-cover"
+                                />
+                              )}
+                              {compressingFiles && (
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                            </div>
+                              )}
+                            </div>
                           ) : (
                             <div className="w-full h-20 sm:h-24 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
                               <DocumentIcon className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />
                             </div>
                           )}
-                        </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
-                )}
-
+                </div>
+              )}
+              
                 {/* Input Controls */}
                 <div className="flex items-end space-x-2 sm:space-x-3">
-                  {/* Text Input */}
+                {/* Text Input */}
                   <div className="flex-1 relative min-w-0">
                     <div className="bg-gray-50 dark:bg-gray-700 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-600 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-opacity-20 transition-all duration-200">
-                      <textarea
-                        ref={inputRef}
-                        value={newMessage}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setNewMessage(value);
-                          e.target.style.height = 'auto';
-                          e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
-                          handleTypingIndicator(value);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSendMessage(e);
-                          }
-                        }}
-                        placeholder="Type a message..."
+                    <textarea
+                      ref={inputRef}
+                      value={newMessage}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setNewMessage(value);
+                        e.target.style.height = 'auto';
+                        e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+                        handleTypingIndicator(value);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage(e);
+                        }
+                      }}
+                      placeholder="Type a message..."
                         className="w-full px-3 py-2 sm:px-4 sm:py-3 pr-12 sm:pr-16 bg-transparent text-sm sm:text-base text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 border-0 resize-none focus:outline-none focus:ring-0"
-                        rows={1}
-                        style={{ 
+                      rows={1}
+                      style={{ 
                           minHeight: '40px', 
-                          maxHeight: '120px',
-                          lineHeight: '1.5'
-                        }}
-                        disabled={isUploading || isRecording || recordedAudio}
-                      />
-                      
-                      {/* Input Controls */}
+                        maxHeight: '120px',
+                        lineHeight: '1.5'
+                      }}
+                      disabled={isUploading || isRecording || recordedAudio}
+                    />
+                    
+                    {/* Input Controls */}
                       <div className="absolute right-1.5 sm:right-2 bottom-1.5 sm:bottom-2 flex items-center space-x-0.5 sm:space-x-1">
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          multiple
-                          accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.rtf"
-                          onChange={handleFileSelect}
-                          className="hidden"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        multiple
+                        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.rtf"
+                        onChange={handleFileSelect}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
                           className="p-1.5 sm:p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-600 transition-all duration-200 touch-manipulation"
-                          disabled={isUploading || isRecording || recordedAudio || selectedFiles.length > 0}
-                          title="Attach file"
+                        disabled={isUploading || isRecording || recordedAudio || selectedFiles.length > 0}
+                        title="Attach file"
                           aria-label="Attach file"
-                        >
+                      >
                           <PaperClipIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        </button>
-                        <button
-                          type="button"
+                      </button>
+                      <button
+                        type="button"
                           className="p-1.5 sm:p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-600 transition-all duration-200 touch-manipulation"
-                          disabled={isUploading || isRecording || recordedAudio || selectedFiles.length > 0}
-                          title="Add emoji"
+                        disabled={isUploading || isRecording || recordedAudio || selectedFiles.length > 0}
+                        title="Add emoji"
                           aria-label="Add emoji"
-                        >
+                      >
                           <FaceSmileIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        </button>
-                      </div>
+                      </button>
                     </div>
                   </div>
+                </div>
 
                   {/* Voice/Send Button */}
-                  {!newMessage.trim() && !recordedAudio ? (
+                  {selectedFiles.length > 0 ? (
+                    // Send Files Button (when files are selected)
                     <button
                       type="button"
-                      onClick={isRecording ? stopRecording : startRecording}
-                      className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0 touch-manipulation ${
-                        isRecording 
-                          ? 'bg-red-500 text-white shadow-lg scale-110 animate-pulse' 
-                          : 'bg-green-500 hover:bg-green-600 active:bg-green-700 text-white shadow-md hover:shadow-lg hover:scale-110 active:scale-95'
-                      }`}
-                      disabled={isUploading || recordedAudio}
-                      title={isRecording ? 'Stop recording' : 'Record voice message'}
-                      aria-label={isRecording ? 'Stop recording' : 'Record voice message'}
+                      onClick={sendSelectedFiles}
+                      disabled={isUploading || compressingFiles}
+                      className="min-w-[44px] min-h-[44px] w-11 h-11 sm:w-12 sm:h-12 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 disabled:bg-gray-400 text-white rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 shadow-md hover:shadow-lg flex-shrink-0 touch-manipulation"
+                      title={isUploading ? 'Sending...' : `Send ${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''}`}
+                      aria-label={isUploading ? 'Sending...' : `Send ${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''}`}
                     >
-                      {isRecording ? (
-                        <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-white rounded-sm"></div>
+                      {isUploading ? (
+                        <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-2 border-white border-t-transparent"></div>
                       ) : (
-                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
-                        </svg>
+                        <PaperAirplaneIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                       )}
                     </button>
-                  ) : newMessage.trim() ? (
-                    <button
-                      type="button"
-                      onClick={handleSendMessage}
-                      className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 shadow-md hover:shadow-lg flex-shrink-0 touch-manipulation"
-                      title="Send message"
+                  ) : !newMessage.trim() && !recordedAudio ? (
+                    // Voice Button (when no text and no files)
+                  <button
+                    type="button"
+                    onClick={isRecording ? stopRecording : startRecording}
+                      className={`min-w-[44px] min-h-[44px] w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0 touch-manipulation ${
+                      isRecording 
+                        ? 'bg-red-500 text-white shadow-lg scale-110 animate-pulse' 
+                          : 'bg-green-500 hover:bg-green-600 active:bg-green-700 text-white shadow-md hover:shadow-lg hover:scale-110 active:scale-95'
+                    }`}
+                    disabled={isUploading || recordedAudio}
+                    title={isRecording ? 'Stop recording' : 'Record voice message'}
+                      aria-label={isRecording ? 'Stop recording' : 'Record voice message'}
+                  >
+                    {isRecording ? (
+                        <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-white rounded-sm"></div>
+                    ) : (
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </button>
+                ) : newMessage.trim() ? (
+                  // Send Text Button
+                  <button
+                    type="button"
+                    onClick={handleSendMessage}
+                      className="min-w-[44px] min-h-[44px] w-11 h-11 sm:w-12 sm:h-12 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 shadow-md hover:shadow-lg flex-shrink-0 touch-manipulation"
+                    title="Send message"
                       aria-label="Send message"
-                    >
+                  >
                       <PaperAirplaneIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
-                  ) : null}
-                </div>
+                  </button>
+                ) : null}
               </div>
             </div>
+          </div>
           )}
         </div>
 
@@ -1752,7 +2188,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
            />
         </div>
       </div>
-
+      
       {/* Image Modal */}
       <ImageModal
         isOpen={imageModalOpen && !!viewingImage}

@@ -188,6 +188,7 @@ body {
     background-color: rgb(107 114 128);
   }
 
+
   /* Touch manipulation for better mobile performance */
   .touch-manipulation {
     touch-action: manipulation;

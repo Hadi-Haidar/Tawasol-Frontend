@@ -62,9 +62,9 @@ class ChatApiService {
   }
 
   // Chat Messages
-  async getMessages(roomId, page = 1) {
+  async getMessages(roomId, page = 1, perPage = 20) {
     const response = await api.get(`/chat-rooms/${roomId}/messages`, {
-      params: { page }
+      params: { page, per_page: perPage }
     });
     return response.data;
   }

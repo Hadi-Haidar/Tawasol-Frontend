@@ -121,9 +121,6 @@ class WebSocketService {
       if (callbacks.onUserLeft) {
         channel.listen('.user.left', callbacks.onUserLeft);
       }
-      if (callbacks.onOnlineStatusChange) {
-        channel.listen('.user.online.status', callbacks.onOnlineStatusChange);
-      }
 
       this.channels.set(channelName, channel);
       
