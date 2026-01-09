@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { 
+import {
   PaperAirplaneIcon,
   FaceSmileIcon,
   PaperClipIcon,
@@ -84,12 +84,12 @@ const LazyImage = React.memo(({ src, alt, className, onClick, style }) => {
 LazyImage.displayName = 'LazyImage';
 
 // Memoized Message Component to prevent unnecessary re-renders
-const MessageBubble = React.memo(({ 
-  message, 
-  user, 
-  userRole, 
-  room, 
-  hoveredMessageId, 
+const MessageBubble = React.memo(({
+  message,
+  user,
+  userRole,
+  room,
+  hoveredMessageId,
   setHoveredMessageId,
   editingMessageId,
   editMessageText,
@@ -111,86 +111,80 @@ const MessageBubble = React.memo(({
   }, [message.created_at, message.id]);
 
   return (
-    <div key={message.id} className="mb-4">
+    <div key={message.id} className="mb-2 sm:mb-3 md:mb-4">
       {message.type === 'system' ? (
-        <div className="text-center">
-          <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
+        <div className="text-center py-1">
+          <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full">
             {message.content || message.message || '[System message]'}
           </span>
         </div>
       ) : (
-        <div 
-          className={`flex items-end space-x-2 sm:space-x-3 group ${
-            message.user_id === user?.id ? 'flex-row-reverse space-x-reverse' : ''
-          }`}
+        <div
+          className={`flex items-end gap-1.5 sm:gap-2 md:gap-3 group ${message.user_id === user?.id ? 'flex-row-reverse' : ''}`}
           onMouseEnter={() => setHoveredMessageId(message.id)}
           onMouseLeave={() => setHoveredMessageId(null)}
+          onTouchStart={() => setHoveredMessageId(message.id)}
         >
-          {/* Avatar */}
-          <div className="flex-shrink-0 mb-1">
-            <Avatar 
+          {/* Avatar - Smaller on mobile */}
+          <div className="flex-shrink-0 mb-0.5">
+            <Avatar
               user={message.user}
               size="sm"
               showBorder={true}
-              className="w-7 h-7 sm:w-8 sm:h-8"
+              className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8"
             />
           </div>
 
           {/* Message Content */}
-          <div className={`flex-1 max-w-[75%] sm:max-w-xs md:max-w-sm lg:max-w-md relative ${
-            message.user_id === user?.id ? 'text-right' : ''
-          }`}>
+          <div className={`flex-1 max-w-[80%] sm:max-w-[75%] md:max-w-sm lg:max-w-md relative ${message.user_id === user?.id ? 'text-right' : ''}`}>
             {/* Show sender name and timestamp only for others */}
             {message.user_id !== user?.id && (
-              <div className="flex items-baseline flex-wrap gap-1.5 sm:gap-2 mb-1">
-                <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">
+              <div className="flex items-baseline flex-wrap gap-1 sm:gap-1.5 mb-0.5 sm:mb-1">
+                <span className="text-[11px] sm:text-xs md:text-sm font-medium text-gray-900 dark:text-white truncate max-w-[120px] sm:max-w-none">
                   {message.user?.name || 'Unknown User'}
                 </span>
-                <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400">
+                <span className="text-[9px] sm:text-[10px] md:text-xs text-gray-500 dark:text-gray-400">
                   {cachedTime}
                 </span>
               </div>
             )}
-            
-            {/* Message Bubble */}
-            <div className={`relative inline-block p-2.5 sm:p-3 rounded-xl sm:rounded-2xl shadow-sm max-w-full ${
-              message.user_id === user?.id
-                ? 'bg-blue-500 text-white rounded-br-md sm:rounded-br-md ml-auto'
-                : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600 rounded-bl-md sm:rounded-bl-md'
-            }`}>
-              
+
+            {/* Message Bubble - More compact on mobile */}
+            <div className={`relative inline-block px-2.5 py-1.5 sm:px-3 sm:py-2 md:p-3 rounded-lg sm:rounded-xl md:rounded-2xl shadow-sm max-w-full ${message.user_id === user?.id
+              ? 'bg-blue-500 text-white rounded-br-sm sm:rounded-br-md ml-auto'
+              : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600 rounded-bl-sm sm:rounded-bl-md'
+              }`}>
+
               {/* Edit/Delete Actions - Hidden for images (delete button is on image overlay) */}
-              {canUserInteractWithMessage(message, user, userRole, room) && 
-               hoveredMessageId === message.id && 
-               editingMessageId !== message.id &&
-               message.type !== 'voice' &&
-               message.type !== 'image' && ( // Hide for images - delete button is on image overlay
-                <div className={`absolute top-1 ${
-                  message.user_id === user?.id ? 'left-1' : 'right-1'
-                } flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
-                  {message.user_id === user?.id && message.type === 'text' && (
-                    <button
-                      onClick={() => startEditMessage(message)}
-                      className="w-6 h-6 sm:w-7 sm:h-7 bg-gray-800 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full flex items-center justify-center transition-all duration-200 touch-manipulation"
-                      title="Edit message"
-                    >
-                      <PencilIcon className="w-3 h-3 sm:w-4 sm:h-4" />
-                    </button>
-                  )}
-                  
-                  {canUserDeleteMessage(message, user, userRole, room) && (
-                    <button
-                      onClick={() => startDeleteMessage(message.id)}
-                      className="w-6 h-6 sm:w-7 sm:h-7 bg-red-500 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full flex items-center justify-center transition-all duration-200 touch-manipulation"
-                      title={`Delete ${message.type === 'text' ? 'message' : message.type === 'voice' ? 'voice message' : 'file'}${
-                        message.user_id !== user?.id ? ` (${userRole === 'owner' ? 'Owner' : 'Moderator'})` : ''
-                      }`}
-                    >
-                      <TrashIcon className="w-3 h-3 sm:w-4 sm:h-4" />
-                    </button>
-                  )}
-                </div>
-              )}
+              {canUserInteractWithMessage(message, user, userRole, room) &&
+                hoveredMessageId === message.id &&
+                editingMessageId !== message.id &&
+                message.type !== 'voice' &&
+                message.type !== 'image' && ( // Hide for images - delete button is on image overlay
+                  <div className={`absolute top-1 ${message.user_id === user?.id ? 'left-1' : 'right-1'
+                    } flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
+                    {message.user_id === user?.id && message.type === 'text' && (
+                      <button
+                        onClick={() => startEditMessage(message)}
+                        className="w-6 h-6 sm:w-7 sm:h-7 bg-gray-800 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full flex items-center justify-center transition-all duration-200 touch-manipulation"
+                        title="Edit message"
+                      >
+                        <PencilIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                      </button>
+                    )}
+
+                    {canUserDeleteMessage(message, user, userRole, room) && (
+                      <button
+                        onClick={() => startDeleteMessage(message.id)}
+                        className="w-6 h-6 sm:w-7 sm:h-7 bg-red-500 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full flex items-center justify-center transition-all duration-200 touch-manipulation"
+                        title={`Delete ${message.type === 'text' ? 'message' : message.type === 'voice' ? 'voice message' : 'file'}${message.user_id !== user?.id ? ` (${userRole === 'owner' ? 'Owner' : 'Moderator'})` : ''
+                          }`}
+                      >
+                        <TrashIcon className="w-3 h-3 sm:w-4 sm:h-4" />
+                      </button>
+                    )}
+                  </div>
+                )}
 
               {/* Edit Mode */}
               {editingMessageId === message.id ? (
@@ -246,10 +240,10 @@ const MessageBubble = React.memo(({
                 </>
               )}
             </div>
-            
+
             {/* Timestamp for own messages */}
             {message.user_id === user?.id && editingMessageId !== message.id && (
-              <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
+              <div className="text-[9px] sm:text-[10px] md:text-xs text-gray-500 dark:text-gray-400 mt-0.5 sm:mt-1 text-right">
                 {cachedTime}
               </div>
             )}
@@ -283,11 +277,11 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
     if (room?.owner_id === message.user_id) {
       return 'owner';
     }
-    
+
     const membership = room?.members?.find(
       member => (member.user?.id || member.user_id) === message.user_id
     );
-    
+
     return membership?.role || 'member';
   };
 
@@ -331,14 +325,14 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
-  
+
   // Edit/Delete message states
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editMessageText, setEditMessageText] = useState('');
   const [deletingMessageId, setDeletingMessageId] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
-  
+
   // Voice recording states - WhatsApp style
   const [isRecording, setIsRecording] = useState(false);
   const [recordedAudio, setRecordedAudio] = useState(null);
@@ -346,20 +340,20 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [audioStream, setAudioStream] = useState(null);
   const [audioPlayStates, setAudioPlayStates] = useState({});
-  
+
   // Video recording states
   const [isRecordingVideo, setIsRecordingVideo] = useState(false);
   const [recordedVideo, setRecordedVideo] = useState(null);
   const [videoRecordingTime, setVideoRecordingTime] = useState(0);
   const [videoMediaRecorder, setVideoMediaRecorder] = useState(null);
   const [videoStream, setVideoStream] = useState(null);
-  
+
   // Image modal states
   const [selectedImage, setSelectedImage] = useState(null);
-  
+
   // Room members modal state
   const [showMembersModal, setShowMembersModal] = useState(false);
-  
+
   // User profile modal state
   const [selectedUserProfile, setSelectedUserProfile] = useState(null);
   const [showUserProfileModal, setShowUserProfileModal] = useState(false);
@@ -369,21 +363,21 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [lastTouchDistance, setLastTouchDistance] = useState(0);
-  
+
   // Smart scroll states - WhatsApp behavior
   const [userScrolledUp, setUserScrolledUp] = useState(false);
   const [lastScrollTop, setLastScrollTop] = useState(0);
-  
+
   // File attachment states
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [filePreviewMode, setFilePreviewMode] = useState(null); // 'image', 'video', 'document'
   const [compressingFiles, setCompressingFiles] = useState(false);
   const [fileThumbnails, setFileThumbnails] = useState({}); // Store thumbnails for images
-  
+
   // Image modal states for viewing images
   const [viewingImage, setViewingImage] = useState(null);
   const [imageModalOpen, setImageModalOpen] = useState(false);
-  
+
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -416,22 +410,23 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
 
     try {
       const response = await chatApiService.editMessage(editingMessageId, editMessageText.trim());
-      
+
       // Update message in local state
-      setMessages(prevMessages => 
-        prevMessages.map(msg => 
-          msg.id === editingMessageId 
-                            ? { ...msg, message: editMessageText.trim(), updated_at: new Date().toISOString() }
+      setMessages(prevMessages =>
+        prevMessages.map(msg =>
+          msg.id === editingMessageId
+            ? { ...msg, message: editMessageText.trim(), updated_at: new Date().toISOString() }
             : msg
         )
       );
-      
+
       // 📦 PERFORMANCE: Clear cache when editing message
       const cacheKey = `messages_room_${room.id}`;
       sessionStorage.removeItem(cacheKey);
-      
+
       setEditingMessageId(null);
-      setEditMessageText('');} catch (error) {
+      setEditMessageText('');
+    } catch (error) {
       console.error('❌ Failed to edit message:', error);
       alert('Failed to edit message. Please try again.');
     }
@@ -453,34 +448,34 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
 
     try {
       await chatApiService.deleteMessage(deletingMessageId);
-      
+
       // Remove message from local state
-      setMessages(prevMessages => 
+      setMessages(prevMessages =>
         prevMessages.filter(msg => msg.id !== deletingMessageId)
       );
-      
+
       // 📦 PERFORMANCE: Clear cache when deleting message
       const cacheKey = `messages_room_${room.id}`;
       sessionStorage.removeItem(cacheKey);
-      
+
       setDeletingMessageId(null);
       setShowDeleteConfirm(false);
     } catch (error) {
       // Handle 404 gracefully - message might already be deleted
       if (error.response?.status === 404) {
         // Message doesn't exist, remove from local state anyway
-        setMessages(prevMessages => 
+        setMessages(prevMessages =>
           prevMessages.filter(msg => msg.id !== deletingMessageId)
         );
         setDeletingMessageId(null);
         setShowDeleteConfirm(false);
         return;
       }
-      
+
       console.error('❌ Failed to delete message:', error);
       // Only show alert for non-404 errors
       if (error.response?.status !== 404) {
-      alert('Failed to delete message. Please try again.');
+        alert('Failed to delete message. Please try again.');
       }
     }
   };
@@ -488,7 +483,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   // Utility functions
   const scrollToBottom = (smooth = true) => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ 
+      messagesEndRef.current.scrollIntoView({
         behavior: smooth ? "smooth" : "auto",
         block: "end",
         inline: "nearest"
@@ -503,10 +498,10 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   // Smart scroll detection - WhatsApp-like behavior
   const isNearBottom = () => {
     if (!messagesContainerRef.current) return true;
-    
+
     const container = messagesContainerRef.current;
     const threshold = 100; // Optimized threshold
-    
+
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
     return distanceFromBottom < threshold;
   };
@@ -514,21 +509,21 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   // Detect manual scroll and update state
   const handleScroll = () => {
     if (!messagesContainerRef.current) return;
-    
+
     const container = messagesContainerRef.current;
     const currentScrollTop = container.scrollTop;
     const nearBottom = isNearBottom();
-    
+
     // Detect if user manually scrolled up
     if (currentScrollTop < lastScrollTop && !nearBottom) {
       setUserScrolledUp(true);
     }
-    
+
     // Reset userScrolledUp when user is back near bottom
     if (nearBottom && userScrolledUp) {
       setUserScrolledUp(false);
     }
-    
+
     setLastScrollTop(currentScrollTop);
   };
 
@@ -536,10 +531,10 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   const smartAutoScroll = (delay = 0, isOwnMessage = false) => {
     setTimeout(() => {
       if (!messagesContainerRef.current) return;
-      
+
       const container = messagesContainerRef.current;
       const nearBottom = isNearBottom();
-      
+
       // Always scroll for user's own messages OR if user is near bottom and hasn't scrolled up
       if (isOwnMessage || (nearBottom && !userScrolledUp)) {
         container.scrollTo({
@@ -596,11 +591,11 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   const focusInputAfterSend = (delay = 100) => {
     setTimeout(() => {
       // Only focus if conditions are right for typing
-      if (inputRef.current && 
-          !isRecording && 
-          !recordedAudio && 
-          !isUploading &&
-          (isMember || isOwner)) {
+      if (inputRef.current &&
+        !isRecording &&
+        !recordedAudio &&
+        !isUploading &&
+        (isMember || isOwner)) {
         try {
           inputRef.current.focus();
           // Ensure cursor is at the end of any existing text
@@ -641,13 +636,13 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
     });
 
     const isCurrentlyPlaying = audioPlayStates[messageId]?.isPlaying || false;
-    
+
     if (isCurrentlyPlaying) {
       audioElement.pause();
     } else {
       audioElement.play();
     }
-    
+
     setAudioPlayStates(prev => ({
       ...prev,
       [messageId]: {
@@ -693,17 +688,17 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
         audioStream.getTracks().forEach(track => track.stop());
         setAudioStream(null);
       }
-      
+
       if (mediaRecorder) {
         setMediaRecorder(null);
-      }const stream = await navigator.mediaDevices.getUserMedia({ 
+      } const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-        } 
-      });setAudioStream(stream);
-      
+        }
+      }); setAudioStream(stream);
+
       // Check if browser supports the desired format
       let mimeType = 'audio/webm;codecs=opus';
       if (!MediaRecorder.isTypeSupported(mimeType)) {
@@ -714,28 +709,30 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
             mimeType = ''; // Let browser choose
           }
         }
-      }const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-      
+      } const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+
       const audioChunks = [];
-      
+
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          audioChunks.push(event.data);}
+          audioChunks.push(event.data);
+        }
       };
-      
-      recorder.onstop = () => {const audioBlob = new Blob(audioChunks, { type: mimeType || 'audio/webm' });setRecordedAudio(audioBlob);
-        
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunks, { type: mimeType || 'audio/webm' }); setRecordedAudio(audioBlob);
+
         // Stop all tracks to release microphone
         stream.getTracks().forEach(track => track.stop());
         setAudioStream(null);
       };
-      
+
       recorder.onerror = (event) => {
         console.error('Recording error:', event.error);
         alert('Recording error: ' + event.error);
         cancelRecording();
       };
-      
+
       setMediaRecorder(recorder);
       recorder.start();
       setIsRecording(true);
@@ -743,10 +740,10 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
       recordingTimerRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
-      
+
     } catch (error) {
       console.error('Error accessing microphone:', error);
-      
+
       if (error.name === 'NotAllowedError') {
         alert('Microphone access denied. Please allow microphone access and try again.');
       } else if (error.name === 'NotFoundError') {
@@ -754,101 +751,101 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
       } else {
         alert('Could not access microphone: ' + error.message);
       }
-      
+
       // Clean up on error
       cancelRecording();
     }
   };
-  
+
   const stopRecording = () => {
     if (mediaRecorder && mediaRecorder.state === 'recording') {
       mediaRecorder.stop();
     }
-    
+
     setIsRecording(false);
-    
+
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
     }
-    
+
     // Clean up audio stream
     if (audioStream) {
       audioStream.getTracks().forEach(track => track.stop());
       setAudioStream(null);
     }
-    
+
     // Reset media recorder
     setMediaRecorder(null);
-    
+
     // Auto-focus input after stopping recording (WhatsApp behavior)
     focusInputAfterSend(200);
   };
-  
+
   const cancelRecording = () => {
     // Stop recording if active
     if (mediaRecorder && mediaRecorder.state === 'recording') {
       mediaRecorder.stop();
     }
-    
+
     // Clean up all states
     setIsRecording(false);
     setRecordedAudio(null);
     setRecordingTime(0);
     setMediaRecorder(null);
-    
+
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
     }
-    
+
     if (audioStream) {
       audioStream.getTracks().forEach(track => track.stop());
       setAudioStream(null);
     }
-    
+
     // Auto-focus input after canceling recording (WhatsApp behavior)
     focusInputAfterSend(100);
   };
-  
+
   const sendVoiceMessage = async () => {
     if (!recordedAudio) return;
-    
+
     try {
       setIsUploading(true);
-      
+
       // Create a more robust FormData
       const formData = new FormData();
-      
+
       // Create a proper file name with timestamp
       const fileName = `voice-${Date.now()}.webm`;
-      
+
       // Append the audio blob as a file
       formData.append('file', recordedAudio, fileName);
       formData.append('type', 'voice');
-      formData.append('message', `Voice message (${Math.floor(recordingTime / 60)}:${(recordingTime % 60).toString().padStart(2, '0')})`);const response = await chatApiService.sendMessageWithFile(room.id, formData);// Clear recorded audio
+      formData.append('message', `Voice message (${Math.floor(recordingTime / 60)}:${(recordingTime % 60).toString().padStart(2, '0')})`); const response = await chatApiService.sendMessageWithFile(room.id, formData);// Clear recorded audio
       setRecordedAudio(null);
       setRecordingTime(0);
-      
+
       // 📦 PERFORMANCE: Clear cache when sending voice message
       const cacheKey = `messages_room_${room.id}`;
       sessionStorage.removeItem(cacheKey);
-      
+
       // WhatsApp-like auto-focus after sending (immediate)
       focusInputAfterSend(50);
-      
+
       // Always scroll for user's own voice message (WhatsApp style)
       smartAutoScroll(50, true);
-      
+
     } catch (error) {
       console.error('Failed to send voice message:', error);
-      
+
       // More detailed error handling
       if (error.response) {
         console.error('Response error:', error.response.data);
         console.error('Response status:', error.response.status);
         console.error('Response headers:', error.response.headers);
-        
+
         // Show specific validation errors
         if (error.response.status === 422 && error.response.data.errors) {
           const errorMessages = Object.values(error.response.data.errors).flat().join(', ');
@@ -873,11 +870,11 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
     const files = Array.from(event.target.files);
     if (files.length > 0) {
       setCompressingFiles(true);
-      
+
       try {
         const processedFiles = [];
         const thumbnails = {};
-        
+
         // Process each file
         for (const file of files) {
           if (file.type.startsWith('image/')) {
@@ -896,7 +893,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                 processedFile = file; // Use original if compression fails
               }
             }
-            
+
             // Generate thumbnail for preview
             try {
               const thumbnail = await generateThumbnail(processedFile, 200);
@@ -904,17 +901,17 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
             } catch (error) {
               console.error('Failed to generate thumbnail:', error);
             }
-            
+
             processedFiles.push(processedFile);
           } else {
             processedFiles.push(file);
           }
         }
-        
+
         setSelectedFiles(processedFiles);
         setFileThumbnails(thumbnails);
-      
-      // Determine preview mode based on file type
+
+        // Determine preview mode based on file type
         const firstFile = processedFiles[0];
         if (firstFile.type.startsWith('image/')) {
           setFilePreviewMode('image');
@@ -929,21 +926,21 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
         console.error('Error processing files:', error);
         // Fallback to original files
         setSelectedFiles(files);
-      const firstFile = files[0];
-      if (firstFile.type.startsWith('image/')) {
-        setFilePreviewMode('image');
-      } else if (firstFile.type.startsWith('video/')) {
-        setFilePreviewMode('video');
-      } else if (firstFile.type.startsWith('audio/')) {
-        setFilePreviewMode('voice');
-      } else {
-        setFilePreviewMode('document');
+        const firstFile = files[0];
+        if (firstFile.type.startsWith('image/')) {
+          setFilePreviewMode('image');
+        } else if (firstFile.type.startsWith('video/')) {
+          setFilePreviewMode('video');
+        } else if (firstFile.type.startsWith('audio/')) {
+          setFilePreviewMode('voice');
+        } else {
+          setFilePreviewMode('document');
         }
       } finally {
         setCompressingFiles(false);
       }
     }
-    
+
     // Reset input value to allow selecting the same file again
     event.target.value = '';
   };
@@ -957,7 +954,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
       for (const file of selectedFiles) {
         const formData = new FormData();
         formData.append('file', file);
-        
+
         // Determine file type
         let type = 'document';
         if (file.type.startsWith('image/')) {
@@ -967,9 +964,9 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
         } else if (file.type.startsWith('audio/')) {
           type = 'voice';
         }
-        
+
         formData.append('type', type);
-        
+
         // Add a descriptive message based on file type
         let message = '';
         if (type === 'document') {
@@ -987,18 +984,18 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
       setSelectedFiles([]);
       setFilePreviewMode(null);
       setFileThumbnails({});
-      
+
       // 📦 PERFORMANCE: Clear cache when sending files
       const cacheKey = `messages_room_${room.id}`;
       sessionStorage.removeItem(cacheKey);
-      
+
       // Auto-focus and scroll
       focusInputAfterSend(100);
       smartAutoScroll(50, true);
-      
+
     } catch (error) {
       console.error('Failed to send files:', error);
-      
+
       // Show more specific error message
       if (error.response?.data?.error) {
         alert(error.response.data.error);
@@ -1032,15 +1029,15 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   // 🚀 PERFORMANCE: Essential chat functions with caching
   const loadMessages = useCallback(async (pageNum = 1, append = false) => {
     if (!room?.id) return;
-    
+
     try {
       setLoading(true);
-      
+
       // 📦 PERFORMANCE: Check sessionStorage cache first (only for initial page)
       if (pageNum === 1 && !append) {
         const cacheKey = `messages_room_${room.id}`;
         const cached = sessionStorage.getItem(cacheKey);
-        
+
         if (cached) {
           try {
             const { data, timestamp } = JSON.parse(cached);
@@ -1057,21 +1054,21 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
           }
         }
       }
-      
+
       // Request fewer messages for faster initial load (20 instead of default 50)
       const perPage = pageNum === 1 ? 20 : 50; // First page: 20, subsequent pages: 50
       const response = await chatApiService.getMessages(room.id, pageNum, perPage);
       const newMessages = response.data || [];
-      
+
       // Filter out invalid messages
       const validMessages = newMessages.filter(msg => msg && msg.id);
-      
+
       if (append) {
         setMessages(prev => [...validMessages.reverse(), ...prev]);
       } else {
         const reversedMessages = validMessages.reverse();
         setMessages(reversedMessages);
-        
+
         // 📦 PERFORMANCE: Cache the initial messages
         if (pageNum === 1) {
           const cacheKey = `messages_room_${room.id}`;
@@ -1080,11 +1077,11 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
             timestamp: Date.now()
           }));
         }
-        
+
         // Instant scroll to bottom when loading initial messages
         setTimeout(scrollToBottomInstant, 100);
       }
-      
+
       setHasMoreMessages(response.current_page < response.last_page);
       setPage(pageNum);
     } catch (error) {
@@ -1100,7 +1097,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
     if (!token || !room?.id) return;
 
     websocketService.initialize(token);
-    
+
     // Join the chat room
     websocketService.joinRoom(room.id, {
       onMessage: (event) => {
@@ -1109,32 +1106,32 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
           console.error('❌ Invalid message structure received:', event);
           return;
         }
-        
+
         const message = event.message;
-        
+
         // ✅ Deduplicate: Check if message already exists (prevents duplicate keys)
         setMessages(prev => {
           // 🚫 Prevent duplicates - React key collision fix
           if (prev.some(m => m.id === message.id)) {
             return prev; // Return unchanged if duplicate
           }
-          
+
           // ✅ Add new message only if it doesn't exist
           return [...prev, message];
         });
-        
+
         // 📦 PERFORMANCE: Clear cache when receiving new message
         const cacheKey = `messages_room_${room.id}`;
         sessionStorage.removeItem(cacheKey);
-        
+
         // Smart WhatsApp-like scrolling based on message sender
         if (message.user_id === user?.id) {
           // Always scroll for user's own messages
           smartAutoScroll(50, true);
         } else {
-                  // Smart scroll for others' messages - only if user hasn't scrolled up
-        smartAutoScroll(150, false);
-      }
+          // Smart scroll for others' messages - only if user hasn't scrolled up
+          smartAutoScroll(150, false);
+        }
       },
       onMessageEdited: (event) => {
         // Handle real-time message edit
@@ -1142,17 +1139,17 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
           console.error('❌ Invalid message edit structure received:', event);
           return;
         }
-        
-        const editedMessage = event.message;setMessages(prev => 
-          prev.map(msg => 
-            msg.id === editedMessage.id 
-              ? { 
-                  ...msg, 
-                  message: editedMessage.message, 
-                  status: editedMessage.status,
-                  is_edited: editedMessage.is_edited,
-                  updated_at: editedMessage.updated_at 
-                }
+
+        const editedMessage = event.message; setMessages(prev =>
+          prev.map(msg =>
+            msg.id === editedMessage.id
+              ? {
+                ...msg,
+                message: editedMessage.message,
+                status: editedMessage.status,
+                is_edited: editedMessage.is_edited,
+                updated_at: editedMessage.updated_at
+              }
               : msg
           )
         );
@@ -1163,15 +1160,15 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
           console.error('❌ Invalid message delete structure received:', event);
           return;
         }
-        
-        const deletedMessageId = event.message_id;setMessages(prev => prev.filter(msg => msg.id !== deletedMessageId));
-        
+
+        const deletedMessageId = event.message_id; setMessages(prev => prev.filter(msg => msg.id !== deletedMessageId));
+
         // Cancel edit mode if the deleted message was being edited
         if (editingMessageId === deletedMessageId) {
           setEditingMessageId(null);
           setEditMessageText('');
         }
-        
+
         // Cancel delete confirmation if the message was being deleted
         if (deletingMessageId === deletedMessageId) {
           setDeletingMessageId(null);
@@ -1183,12 +1180,12 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
           console.error('❌ Invalid typing event structure:', event);
           return;
         }
-        
+
         // Don't show typing indicator for current user
         if (event.user.id === user?.id) {
           return;
         }
-        
+
         setTypingUsers(prev => {
           if (event.is_typing) {
             // Add user to typing list if not already there
@@ -1202,7 +1199,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
             return prev.filter(u => u.id !== event.user.id);
           }
         });
-        
+
         // Auto-remove typing indicator after 8 seconds (fallback - longer than backend timeout)
         if (event.is_typing) {
           setTimeout(() => {
@@ -1215,14 +1212,14 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
           console.error('❌ Invalid user joined event structure:', event);
           return;
         }
-        
+
         setMessages(prev => [...prev, {
           id: `system-${Date.now()}`,
           type: 'system',
           content: `${event.user.name} joined the room`,
           created_at: new Date().toISOString()
         }]);
-        
+
         // Smart scroll for system messages
         smartAutoScroll(100, false);
       },
@@ -1231,14 +1228,14 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
           console.error('❌ Invalid user left event structure:', event);
           return;
         }
-        
+
         setMessages(prev => [...prev, {
           id: `system-${Date.now()}`,
           type: 'system',
           content: `${event.user.name} left the room`,
           created_at: new Date().toISOString()
         }]);
-        
+
         // Smart scroll for system messages
         smartAutoScroll(100, false);
       }
@@ -1252,25 +1249,25 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   // Handle typing indicator with improved debouncing and efficiency
   const handleTypingIndicator = useCallback((value) => {
     if (!room?.id || !isConnected) return;
-    
+
     // Clear existing timeout
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-    
+
     if (value.trim()) {
       // Only send typing indicator if we haven't sent one recently
       const now = Date.now();
       const lastTypingSent = typingTimeoutRef.lastSent || 0;
       const timeSinceLastSent = now - lastTypingSent;
-      
+
       // Only send typing indicator every 2 seconds max (debounce)
       if (timeSinceLastSent > 2000) {
         chatApiService.sendTypingIndicator(room.id, true)
           .catch(error => console.error('Failed to send typing indicator:', error));
         typingTimeoutRef.lastSent = now;
       }
-      
+
       // Set timeout to stop typing indicator after 5 seconds of no typing
       typingTimeoutRef.current = setTimeout(() => {
         chatApiService.sendTypingIndicator(room.id, false)
@@ -1293,7 +1290,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
 
     try {
       setIsUploading(true);
-      
+
       // Stop typing indicator before sending message
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -1304,21 +1301,21 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
           .catch(error => console.error('Failed to stop typing indicator:', error));
         typingTimeoutRef.lastSent = 0;
       }
-      
+
       await chatApiService.sendMessage(room.id, {
         message: newMessage,
         type: 'text'
       });
 
       setNewMessage('');
-      
+
       // 📦 PERFORMANCE: Clear cache when sending new message
       const cacheKey = `messages_room_${room.id}`;
       sessionStorage.removeItem(cacheKey);
-      
+
       // WhatsApp-like auto-focus after sending (immediate)
       focusInputAfterSend(50);
-      
+
       // Always scroll for user's own voice message (WhatsApp style)
       smartAutoScroll(50, true);
     } catch (error) {
@@ -1334,7 +1331,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
 
     // ✅ Fetch messages ONCE when entering room
     loadMessages();
-    
+
     // ✅ Initialize WebSocket ONCE when entering room
     initializeWebSocket();
 
@@ -1342,16 +1339,16 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
       if (room?.id) {
         websocketService.leaveRoom(room.id);
       }
-      
+
       // Cleanup voice recording
       if (isRecording) {
         cancelRecording();
       }
-      
+
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
       }
-      
+
       // Cleanup typing timeout
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -1396,16 +1393,16 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
     if (isInitialMountRef.current && (isMember || isOwner) && inputRef.current && !hasFocusedRef.current) {
       const timer = setTimeout(() => {
         if (inputRef.current && !hasFocusedRef.current) {
-        inputRef.current?.focus();
+          inputRef.current?.focus();
           hasFocusedRef.current = true;
         }
       }, 300);
-      
+
       isInitialMountRef.current = false;
       return () => clearTimeout(timer);
     }
   }, [isMember, isOwner]);
-  
+
   // Reset focus flag when room changes
   useEffect(() => {
     isInitialMountRef.current = true;
@@ -1458,17 +1455,17 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
             {message.message || '[No message content]'}
           </p>
         );
-      
+
       case 'image':
         return (
           <div className="space-y-2">
             {/* Optimized image with IntersectionObserver lazy loading */}
             <div className="relative max-w-full group/image-container">
               <LazyImage
-              src={message.file_url}
-              alt="Image"
-              className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity object-cover"
-              onClick={() => openImageModal(message.file_url)}
+                src={message.file_url}
+                alt="Image"
+                className="max-w-full max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-opacity object-cover"
+                onClick={() => openImageModal(message.file_url)}
                 style={{
                   backgroundColor: '#f3f4f6',
                   minHeight: '200px',
@@ -1476,23 +1473,23 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                 }}
               />
               {/* Delete button overlay on image - Enhanced positioning for PC and mobile */}
-              {canUserInteractWithMessage && 
-               canUserDeleteMessage && 
-               canUserInteractWithMessage(message, user, userRole, room) && 
-               canUserDeleteMessage(message, user, userRole, room) && 
-               editingMessageId !== message.id && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation(); // Prevent opening image modal
-                    startDeleteMessage(message.id);
-                  }}
-                  className="absolute top-2 right-2 sm:top-3 sm:right-3 w-8 h-8 sm:w-9 sm:h-9 bg-red-500 hover:bg-red-600 active:bg-red-700 text-white rounded-full flex items-center justify-center transition-all duration-200 shadow-lg hover:shadow-xl opacity-90 hover:opacity-100 touch-manipulation z-10"
-                  title={`Delete image${message.user_id !== user?.id ? ` (${userRole === 'owner' ? 'Owner' : 'Moderator'})` : ''}`}
-                  aria-label="Delete image"
-                >
-                  <TrashIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
-              )}
+              {canUserInteractWithMessage &&
+                canUserDeleteMessage &&
+                canUserInteractWithMessage(message, user, userRole, room) &&
+                canUserDeleteMessage(message, user, userRole, room) &&
+                editingMessageId !== message.id && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent opening image modal
+                      startDeleteMessage(message.id);
+                    }}
+                    className="absolute top-2 right-2 sm:top-3 sm:right-3 w-8 h-8 sm:w-9 sm:h-9 bg-red-500 hover:bg-red-600 active:bg-red-700 text-white rounded-full flex items-center justify-center transition-all duration-200 shadow-lg hover:shadow-xl opacity-90 hover:opacity-100 touch-manipulation z-10"
+                    title={`Delete image${message.user_id !== user?.id ? ` (${userRole === 'owner' ? 'Owner' : 'Moderator'})` : ''}`}
+                    aria-label="Delete image"
+                  >
+                    <TrashIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </button>
+                )}
             </div>
             {message.message && !message.message.match(/^(image|video|document) file: .+\.(jpg|jpeg|png|gif|webp|mp4|avi|mov|pdf|doc|docx)$/i) && (
               <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -1501,7 +1498,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
             )}
           </div>
         );
-      
+
       case 'document':
         return (
           <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 group">
@@ -1523,7 +1520,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
             </div>
           </div>
         );
-      
+
       case 'voice':
         return (
           <VoiceMessage
@@ -1534,7 +1531,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
             onDelete={() => startDeleteMessage(message.id)}
           />
         );
-      
+
       case 'video':
         return (
           <div className="space-y-2">
@@ -1549,7 +1546,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
             )}
           </div>
         );
-      
+
       default:
         return (
           <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -1562,7 +1559,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
   return (
     <>
       {/* Main Chat Interface - Fully Responsive */}
-      <div className="h-[calc(100vh-16rem)] sm:h-[calc(100vh-14rem)] md:h-[600px] bg-gradient-to-b from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 flex flex-col md:flex-row rounded-lg shadow-sm relative">
+      <div className="h-full bg-gradient-to-b from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 flex flex-col md:flex-row rounded-lg shadow-sm relative overscroll-contain">
         {/* Chat Messages Area */}
         <div className="flex-1 flex flex-col min-w-0 relative min-h-0">
           {/* Mobile Sidebar Toggle Button */}
@@ -1577,10 +1574,10 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
           )}
 
           {/* Messages Area - Scrollable */}
-          <div 
+          <div
             ref={messagesContainerRef}
             onScroll={handleScroll}
-            className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4 min-h-0"
+            className="flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-3 md:p-4 lg:p-6 space-y-1 sm:space-y-2 md:space-y-3 min-h-0 overscroll-contain"
             style={{
               backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23f3f4f6' fill-opacity='0.3'%3E%3Cpath d='m36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
               WebkitOverflowScrolling: 'touch', // Smooth scrolling on iOS
@@ -1606,7 +1603,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                 {/* Message bubbles - Optimized with React.memo */}
                 {messages.map((message) => {
                   if (!message || !message.id) return null;
-                  
+
                   return (
                     <MessageBubble
                       key={message.id}
@@ -1632,12 +1629,13 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                     />
                   );
                 })}
-                
+
                 {/* OLD CODE - REMOVED FOR PERFORMANCE */}
                 {false && messages.map((message) => {
-                  if (!message || !message.id) {return null;
+                  if (!message || !message.id) {
+                    return null;
                   }
-                  
+
                   return (
                     <div key={message.id} className="mb-4">
                       {message.type === 'system' ? (
@@ -1647,16 +1645,15 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                           </span>
                         </div>
                       ) : (
-                        <div 
-                          className={`flex items-end space-x-2 sm:space-x-3 group ${
-                            message.user_id === user?.id ? 'flex-row-reverse space-x-reverse' : ''
-                          }`}
+                        <div
+                          className={`flex items-end space-x-2 sm:space-x-3 group ${message.user_id === user?.id ? 'flex-row-reverse space-x-reverse' : ''
+                            }`}
                           onMouseEnter={() => setHoveredMessageId(message.id)}
                           onMouseLeave={() => setHoveredMessageId(null)}
                         >
                           {/* Avatar */}
                           <div className="flex-shrink-0 mb-1">
-                            <Avatar 
+                            <Avatar
                               user={message.user}
                               size="sm"
                               showBorder={true}
@@ -1665,9 +1662,8 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                           </div>
 
                           {/* Message Content */}
-                          <div className={`flex-1 max-w-[75%] sm:max-w-xs md:max-w-sm lg:max-w-md relative ${
-                            message.user_id === user?.id ? 'text-right' : ''
-                          }`}>
+                          <div className={`flex-1 max-w-[75%] sm:max-w-xs md:max-w-sm lg:max-w-md relative ${message.user_id === user?.id ? 'text-right' : ''
+                            }`}>
                             {/* Show sender name and timestamp only for others */}
                             {message.user_id !== user?.id && (
                               <div className="flex items-baseline flex-wrap gap-1.5 sm:gap-2 mb-1">
@@ -1679,47 +1675,44 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                                 </span>
                               </div>
                             )}
-                            
+
                             {/* Message Bubble */}
-                            <div className={`relative inline-block p-2.5 sm:p-3 rounded-xl sm:rounded-2xl shadow-sm max-w-full ${
-                              message.user_id === user?.id
-                                ? 'bg-blue-500 text-white rounded-br-md sm:rounded-br-md ml-auto'
-                                : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600 rounded-bl-md sm:rounded-bl-md'
-                            }`}>
-                              
+                            <div className={`relative inline-block p-2.5 sm:p-3 rounded-xl sm:rounded-2xl shadow-sm max-w-full ${message.user_id === user?.id
+                              ? 'bg-blue-500 text-white rounded-br-md sm:rounded-br-md ml-auto'
+                              : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-600 rounded-bl-md sm:rounded-bl-md'
+                              }`}>
+
                               {/* Edit/Delete Actions - Own messages or role-based permissions (exclude voice messages) */}
-                              {canUserInteractWithMessage(message, user, userRole, room) && 
-                               hoveredMessageId === message.id && 
-                               editingMessageId !== message.id &&
-                               message.type !== 'voice' && (
-                                <div className={`absolute top-1 ${
-                                  message.user_id === user?.id ? 'left-1' : 'right-1'
-                                } flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
-                                  {/* Edit Button - Only for own text messages */}
-                                  {message.user_id === user?.id && message.type === 'text' && (
-                                    <button
-                                      onClick={() => startEditMessage(message)}
-                                      className="w-6 h-6 bg-gray-800 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full flex items-center justify-center transition-all duration-200"
-                                      title="Edit message"
-                                    >
-                                      <PencilIcon className="w-3 h-3" />
-                                    </button>
-                                  )}
-                                  
-                                  {/* Delete Button - Role-based permissions */}
-                                  {canUserDeleteMessage(message, user, userRole, room) && (
-                                    <button
-                                      onClick={() => startDeleteMessage(message.id)}
-                                      className="w-6 h-6 bg-red-500 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full flex items-center justify-center transition-all duration-200"
-                                      title={`Delete ${message.type === 'text' ? 'message' : message.type === 'voice' ? 'voice message' : message.type === 'image' ? 'image' : 'file'}${
-                                        message.user_id !== user?.id ? ` (${userRole === 'owner' ? 'Owner' : 'Moderator'})` : ''
-                                      }`}
-                                    >
-                                      <TrashIcon className="w-3 h-3" />
-                                    </button>
-                                  )}
-                                </div>
-                              )}
+                              {canUserInteractWithMessage(message, user, userRole, room) &&
+                                hoveredMessageId === message.id &&
+                                editingMessageId !== message.id &&
+                                message.type !== 'voice' && (
+                                  <div className={`absolute top-1 ${message.user_id === user?.id ? 'left-1' : 'right-1'
+                                    } flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200`}>
+                                    {/* Edit Button - Only for own text messages */}
+                                    {message.user_id === user?.id && message.type === 'text' && (
+                                      <button
+                                        onClick={() => startEditMessage(message)}
+                                        className="w-6 h-6 bg-gray-800 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full flex items-center justify-center transition-all duration-200"
+                                        title="Edit message"
+                                      >
+                                        <PencilIcon className="w-3 h-3" />
+                                      </button>
+                                    )}
+
+                                    {/* Delete Button - Role-based permissions */}
+                                    {canUserDeleteMessage(message, user, userRole, room) && (
+                                      <button
+                                        onClick={() => startDeleteMessage(message.id)}
+                                        className="w-6 h-6 bg-red-500 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full flex items-center justify-center transition-all duration-200"
+                                        title={`Delete ${message.type === 'text' ? 'message' : message.type === 'voice' ? 'voice message' : message.type === 'image' ? 'image' : 'file'}${message.user_id !== user?.id ? ` (${userRole === 'owner' ? 'Owner' : 'Moderator'})` : ''
+                                          }`}
+                                      >
+                                        <TrashIcon className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
 
                               {/* Edit Mode */}
                               {editingMessageId === message.id ? (
@@ -1759,14 +1752,14 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                               ) : (
                                 <>
                                   {renderMessageContent(message, {
-                    user,
-                    userRole,
-                    room,
-                    editingMessageId,
-                    canUserInteractWithMessage,
-                    canUserDeleteMessage,
-                    startDeleteMessage
-                  })}
+                                    user,
+                                    userRole,
+                                    room,
+                                    editingMessageId,
+                                    canUserInteractWithMessage,
+                                    canUserDeleteMessage,
+                                    startDeleteMessage
+                                  })}
                                   {/* Edited indicator */}
                                   {message.is_edited && (
                                     <div className="text-xs opacity-60 mt-1">
@@ -1776,7 +1769,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                                 </>
                               )}
                             </div>
-                            
+
                             {/* Timestamp for own messages */}
                             {message.user_id === user?.id && editingMessageId !== message.id && (
                               <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
@@ -1795,14 +1788,14 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                     </div>
                   );
                 })}
-                
+
                 {/* Typing Indicators - Responsive */}
                 {typingUsers.length > 0 && (
                   <div className="mb-2 sm:mb-3">
                     <div className="flex items-center space-x-1.5 sm:space-x-2">
                       <div className="flex -space-x-1">
                         {typingUsers.slice(0, 2).map((user, index) => (
-                          <Avatar 
+                          <Avatar
                             key={user.id}
                             user={user}
                             size="xs"
@@ -1811,15 +1804,15 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                           />
                         ))}
                       </div>
-                      
+
                       <div className="bg-gray-50 dark:bg-gray-800 rounded-full px-2 sm:px-3 py-1 sm:py-1.5 border border-gray-200 dark:border-gray-700">
                         <div className="flex items-center space-x-1.5 sm:space-x-2">
                           <span className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium truncate max-w-[100px] sm:max-w-none">
-                            {typingUsers.length === 1 
+                            {typingUsers.length === 1
                               ? `${typingUsers[0].name}`
                               : typingUsers.length === 2
-                              ? `${typingUsers[0].name} & ${typingUsers[1].name}`
-                              : `${typingUsers[0].name} +${typingUsers.length - 1}`
+                                ? `${typingUsers[0].name} & ${typingUsers[1].name}`
+                                : `${typingUsers[0].name} +${typingUsers.length - 1}`
                             }
                           </span>
                           <div className="flex space-x-0.5">
@@ -1832,19 +1825,19 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                     </div>
                   </div>
                 )}
-                
+
                 {/* Enhanced scroll target with minimal space */}
                 <div ref={messagesEndRef} className="h-4 w-full" />
               </>
             )}
-        </div>
+          </div>
 
           {/* Main Input Area - Responsive - Fixed at bottom of chat container */}
-      {(isMember || isOwner) && (
+          {(isMember || isOwner) && (
             <div className="p-2 sm:p-3 md:p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
               <div className="max-w-4xl mx-auto">
-          {/* Voice Recording Preview - WhatsApp Style */}
-          {recordedAudio && (
+                {/* Voice Recording Preview - WhatsApp Style */}
+                {recordedAudio && (
                   <div className="mb-3 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-3 sm:p-4 rounded-xl border border-green-200 dark:border-green-700">
                     <div className="flex items-center space-x-2 sm:space-x-3">
                       <button
@@ -1868,64 +1861,64 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                         </div>
                       </div>
                       <div className="flex items-center space-x-1 sm:space-x-2">
-                      <button
-                        onClick={sendVoiceMessage}
-                        disabled={isUploading}
+                        <button
+                          onClick={sendVoiceMessage}
+                          disabled={isUploading}
                           className="w-8 h-8 sm:w-10 sm:h-10 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white rounded-full flex items-center justify-center transition-all duration-200 flex-shrink-0 touch-manipulation"
-                        title="Send voice message"
-                      >
-                        {isUploading ? (
+                          title="Send voice message"
+                        >
+                          {isUploading ? (
                             <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-2 border-white border-t-transparent"></div>
-                        ) : (
+                          ) : (
                             <PaperAirplaneIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                        )}
-                      </button>
-                      <button
-                        onClick={cancelRecording}
+                          )}
+                        </button>
+                        <button
+                          onClick={cancelRecording}
                           className="w-8 h-8 sm:w-10 sm:h-10 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full flex items-center justify-center transition-all duration-200 flex-shrink-0 touch-manipulation"
-                        title="Cancel voice message"
-                      >
+                          title="Cancel voice message"
+                        >
                           <XMarkIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                      </button>
-                    </div>
+                        </button>
+                      </div>
                       <audio
                         id="preview-audio"
                         className="hidden"
                         src={URL.createObjectURL(recordedAudio)}
                       />
-              </div>
-            </div>
-          )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Active Recording Indicator */}
-          {isRecording && (
+                {isRecording && (
                   <div className="mb-3 bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 p-3 rounded-xl border border-red-200 dark:border-red-700">
-                  <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2 sm:space-x-3">
                         <div className="w-2 h-2 sm:w-3 sm:h-3 bg-red-500 rounded-full animate-pulse"></div>
                         <span className="text-xs sm:text-sm font-medium text-red-600 dark:text-red-400">Recording</span>
                         <span className="text-xs sm:text-sm font-mono text-gray-600 dark:text-gray-400">
-                        {formatRecordingTime(recordingTime)}
-                      </span>
-                    </div>
-                    <button
-                      onClick={stopRecording}
+                          {formatRecordingTime(recordingTime)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={stopRecording}
                         className="px-3 py-1.5 sm:px-4 sm:py-2 bg-red-500 hover:bg-red-600 text-white text-xs sm:text-sm font-medium rounded-full transition-all duration-200 touch-manipulation"
-                    >
+                      >
                         Stop
-                    </button>
-              </div>
-            </div>
-          )}
-              
-              {/* File Preview Area */}
-              {selectedFiles.length > 0 && (
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* File Preview Area */}
+                {selectedFiles.length > 0 && (
                   <div className="mb-3 bg-white dark:bg-gray-800 rounded-xl p-3 sm:p-4 shadow-sm border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <h3 className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">
                           {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected
-                    </h3>
+                        </h3>
                         {compressingFiles && (
                           <div className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
                             <div className="animate-spin rounded-full h-3 w-3 border-2 border-blue-600 border-t-transparent"></div>
@@ -1933,17 +1926,17 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                           </div>
                         )}
                       </div>
-                    <button
-                      onClick={cancelFileSelection}
+                      <button
+                        onClick={cancelFileSelection}
                         className="text-gray-400 hover:text-red-500 transition-colors touch-manipulation disabled:opacity-50"
-                      title="Cancel"
+                        title="Cancel"
                         disabled={compressingFiles}
-                    >
+                      >
                         <XMarkIcon className="w-4 h-4" />
-                    </button>
-                  </div>
+                      </button>
+                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                    {selectedFiles.map((file, index) => (
+                      {selectedFiles.map((file, index) => (
                         <div key={index} className="relative">
                           {file.type.startsWith('image/') ? (
                             <div className="relative w-full h-20 sm:h-24 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700">
@@ -1963,7 +1956,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                               {compressingFiles && (
                                 <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                            </div>
+                                </div>
                               )}
                             </div>
                           ) : (
@@ -1971,76 +1964,76 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                               <DocumentIcon className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />
                             </div>
                           )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-                {/* Input Controls */}
-                <div className="flex items-end space-x-2 sm:space-x-3">
-                {/* Text Input */}
-                  <div className="flex-1 relative min-w-0">
-                    <div className="bg-gray-50 dark:bg-gray-700 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-gray-600 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-opacity-20 transition-all duration-200">
-                    <textarea
-                      ref={inputRef}
-                      value={newMessage}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setNewMessage(value);
-                        e.target.style.height = 'auto';
-                        e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
-                        handleTypingIndicator(value);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSendMessage(e);
-                        }
-                      }}
-                      placeholder="Type a message..."
-                        className="w-full px-3 py-2 sm:px-4 sm:py-3 pr-12 sm:pr-16 bg-transparent text-sm sm:text-base text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 border-0 resize-none focus:outline-none focus:ring-0"
-                      rows={1}
-                      style={{ 
-                          minHeight: '40px', 
-                        maxHeight: '120px',
-                        lineHeight: '1.5'
-                      }}
-                      disabled={isUploading || isRecording || recordedAudio}
-                    />
-                    
-                    {/* Input Controls */}
-                      <div className="absolute right-1.5 sm:right-2 bottom-1.5 sm:bottom-2 flex items-center space-x-0.5 sm:space-x-1">
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.rtf"
-                        onChange={handleFileSelect}
-                        className="hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                          className="p-1.5 sm:p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-600 transition-all duration-200 touch-manipulation"
-                        disabled={isUploading || isRecording || recordedAudio || selectedFiles.length > 0}
-                        title="Attach file"
-                          aria-label="Attach file"
-                      >
-                          <PaperClipIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      </button>
-                      <button
-                        type="button"
-                          className="p-1.5 sm:p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-600 transition-all duration-200 touch-manipulation"
-                        disabled={isUploading || isRecording || recordedAudio || selectedFiles.length > 0}
-                        title="Add emoji"
-                          aria-label="Add emoji"
-                      >
-                          <FaceSmileIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      </button>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                </div>
+                )}
+
+                {/* Input Controls */}
+                <div className="flex items-end gap-1.5 sm:gap-2 md:gap-3">
+                  {/* Text Input */}
+                  <div className="flex-1 relative min-w-0">
+                    <div className="bg-gray-50 dark:bg-gray-700 rounded-full sm:rounded-xl md:rounded-2xl border border-gray-200 dark:border-gray-600 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-opacity-20 transition-all duration-200">
+                      <textarea
+                        ref={inputRef}
+                        value={newMessage}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setNewMessage(value);
+                          e.target.style.height = 'auto';
+                          e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
+                          handleTypingIndicator(value);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendMessage(e);
+                          }
+                        }}
+                        placeholder="Type a message..."
+                        className="w-full px-3 py-2 sm:px-4 sm:py-2.5 pr-16 sm:pr-20 bg-transparent text-[13px] sm:text-sm md:text-base text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 border-0 resize-none focus:outline-none focus:ring-0"
+                        rows={1}
+                        style={{
+                          minHeight: '36px',
+                          maxHeight: '100px',
+                          lineHeight: '1.4'
+                        }}
+                        disabled={isUploading || isRecording || recordedAudio}
+                      />
+
+                      {/* Input Controls */}
+                      <div className="absolute right-1.5 sm:right-2 bottom-1.5 sm:bottom-2 flex items-center space-x-0.5 sm:space-x-1">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          multiple
+                          accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.rtf"
+                          onChange={handleFileSelect}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="p-1.5 sm:p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-600 transition-all duration-200 touch-manipulation"
+                          disabled={isUploading || isRecording || recordedAudio || selectedFiles.length > 0}
+                          title="Attach file"
+                          aria-label="Attach file"
+                        >
+                          <PaperClipIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          className="p-1.5 sm:p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-600 transition-all duration-200 touch-manipulation"
+                          disabled={isUploading || isRecording || recordedAudio || selectedFiles.length > 0}
+                          title="Add emoji"
+                          aria-label="Add emoji"
+                        >
+                          <FaceSmileIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
 
                   {/* Voice/Send Button */}
                   {selectedFiles.length > 0 ? (
@@ -2061,41 +2054,40 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                     </button>
                   ) : !newMessage.trim() && !recordedAudio ? (
                     // Voice Button (when no text and no files)
-                  <button
-                    type="button"
-                    onClick={isRecording ? stopRecording : startRecording}
-                      className={`min-w-[44px] min-h-[44px] w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0 touch-manipulation ${
-                      isRecording 
-                        ? 'bg-red-500 text-white shadow-lg scale-110 animate-pulse' 
-                          : 'bg-green-500 hover:bg-green-600 active:bg-green-700 text-white shadow-md hover:shadow-lg hover:scale-110 active:scale-95'
-                    }`}
-                    disabled={isUploading || recordedAudio}
-                    title={isRecording ? 'Stop recording' : 'Record voice message'}
+                    <button
+                      type="button"
+                      onClick={isRecording ? stopRecording : startRecording}
+                      className={`min-w-[44px] min-h-[44px] w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0 touch-manipulation ${isRecording
+                        ? 'bg-red-500 text-white shadow-lg scale-110 animate-pulse'
+                        : 'bg-green-500 hover:bg-green-600 active:bg-green-700 text-white shadow-md hover:shadow-lg hover:scale-110 active:scale-95'
+                        }`}
+                      disabled={isUploading || recordedAudio}
+                      title={isRecording ? 'Stop recording' : 'Record voice message'}
                       aria-label={isRecording ? 'Stop recording' : 'Record voice message'}
-                  >
-                    {isRecording ? (
+                    >
+                      {isRecording ? (
                         <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-white rounded-sm"></div>
-                    ) : (
+                      ) : (
                         <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </button>
-                ) : newMessage.trim() ? (
-                  // Send Text Button
-                  <button
-                    type="button"
-                    onClick={handleSendMessage}
+                          <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </button>
+                  ) : newMessage.trim() ? (
+                    // Send Text Button
+                    <button
+                      type="button"
+                      onClick={handleSendMessage}
                       className="min-w-[44px] min-h-[44px] w-11 h-11 sm:w-12 sm:h-12 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 shadow-md hover:shadow-lg flex-shrink-0 touch-manipulation"
-                    title="Send message"
+                      title="Send message"
                       aria-label="Send message"
-                  >
+                    >
                       <PaperAirplaneIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </button>
-                ) : null}
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </div>
-          </div>
           )}
         </div>
 
@@ -2120,7 +2112,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                 </button>
               </div>
               <div className="p-4">
-                <button 
+                <button
                   onClick={() => {
                     setShowSidebar(false);
                     setShowMembersModal(true);
@@ -2141,9 +2133,9 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                     </div>
                   </div>
                 </button>
-                
-                <OnlineMembers 
-                  room={room} 
+
+                <OnlineMembers
+                  room={room}
                   user={user}
                   onMemberClick={(member) => {
                     setShowSidebar(false);
@@ -2158,7 +2150,7 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
 
         {/* Desktop: Always visible sidebar */}
         <div className="hidden md:flex md:w-64 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex-col flex-shrink-0">
-          <button 
+          <button
             onClick={() => setShowMembersModal(true)}
             className="w-full p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left"
           >
@@ -2176,19 +2168,19 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
               </div>
             </div>
           </button>
-          
+
           {/* Online Members Component */}
-                     <OnlineMembers 
-             room={room} 
-             user={user}
-             onMemberClick={(member) => {
-               setSelectedUserProfile(member);
-               setShowUserProfileModal(true);
-             }}
-           />
+          <OnlineMembers
+            room={room}
+            user={user}
+            onMemberClick={(member) => {
+              setSelectedUserProfile(member);
+              setShowUserProfileModal(true);
+            }}
+          />
         </div>
       </div>
-      
+
       {/* Image Modal */}
       <ImageModal
         isOpen={imageModalOpen && !!viewingImage}
@@ -2231,11 +2223,11 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                   Delete {(() => {
                     const messageToDelete = messages.find(msg => msg.id === deletingMessageId);
                     const type = messageToDelete?.type || 'message';
-                    return type === 'text' ? 'Message' : 
-                           type === 'voice' ? 'Voice Message' : 
-                           type === 'image' ? 'Image' : 
-                           type === 'video' ? 'Video' :
-                           type === 'document' ? 'Document' : 'File';
+                    return type === 'text' ? 'Message' :
+                      type === 'voice' ? 'Voice Message' :
+                        type === 'image' ? 'Image' :
+                          type === 'video' ? 'Video' :
+                            type === 'document' ? 'Document' : 'File';
                   })()}
                 </h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -2243,19 +2235,19 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                 </p>
               </div>
             </div>
-            
+
             <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
               {(() => {
                 const messageToDelete = messages.find(msg => msg.id === deletingMessageId);
                 const type = messageToDelete?.type || 'message';
                 return type === 'text' ? 'Are you sure you want to delete this message? It will be permanently removed from the chat.' :
-                       type === 'voice' ? 'Are you sure you want to delete this voice message? The audio file will be permanently removed.' :
-                       type === 'image' ? 'Are you sure you want to delete this image? It will be permanently removed from the chat.' :
-                       type === 'video' ? 'Are you sure you want to delete this video? It will be permanently removed from the chat.' :
-                       'Are you sure you want to delete this file? It will be permanently removed from the chat.';
+                  type === 'voice' ? 'Are you sure you want to delete this voice message? The audio file will be permanently removed.' :
+                    type === 'image' ? 'Are you sure you want to delete this image? It will be permanently removed from the chat.' :
+                      type === 'video' ? 'Are you sure you want to delete this video? It will be permanently removed from the chat.' :
+                        'Are you sure you want to delete this file? It will be permanently removed from the chat.';
               })()}
             </p>
-            
+
             <div className="flex justify-end space-x-3">
               <button
                 onClick={cancelDeleteMessage}
@@ -2270,10 +2262,10 @@ const RoomChat = ({ room, user, isMember, isOwner, userRole }) => {
                 Delete {(() => {
                   const messageToDelete = messages.find(msg => msg.id === deletingMessageId);
                   const type = messageToDelete?.type || 'message';
-                  return type === 'text' ? 'Message' : 
-                         type === 'voice' ? 'Voice' : 
-                         type === 'image' ? 'Image' : 
-                         type === 'video' ? 'Video' : 'File';
+                  return type === 'text' ? 'Message' :
+                    type === 'voice' ? 'Voice' :
+                      type === 'image' ? 'Image' :
+                        type === 'video' ? 'Video' : 'File';
                 })()}
               </button>
             </div>

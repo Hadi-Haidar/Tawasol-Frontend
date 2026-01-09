@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
+import {
   ArrowLeftIcon,
   UsersIcon,
   LockClosedIcon,
@@ -29,7 +29,7 @@ const RoomPage = React.memo(() => {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  
+
   /**
    * Tab Persistence Feature:
    * - Saves the active tab to localStorage when changed
@@ -37,7 +37,7 @@ const RoomPage = React.memo(() => {
    * - Validates that saved tabs are still valid for the room type
    * - Each room has its own saved tab state
    */
-  
+
   // Initialize activeTab from localStorage or default to 'chat'
   const [activeTab, setActiveTab] = useState(() => {
     if (roomId) {
@@ -64,14 +64,14 @@ const RoomPage = React.memo(() => {
   const handleTabChange = (tabId) => {
     // Store current scroll position
     const scrollY = window.scrollY;
-    
+
     // Change tab
     setActiveTab(tabId);
     if (roomId) {
       localStorage.setItem(`room_${roomId}_activeTab`, tabId);
-      if (process.env.NODE_ENV === 'development') {}
+      if (process.env.NODE_ENV === 'development') { }
     }
-    
+
     // Restore scroll position to prevent jump
     requestAnimationFrame(() => {
       window.scrollTo(0, scrollY);
@@ -82,7 +82,7 @@ const RoomPage = React.memo(() => {
   useEffect(() => {
     if (roomId) {
       const savedTab = localStorage.getItem(`room_${roomId}_activeTab`);
-      if (process.env.NODE_ENV === 'development') {}
+      if (process.env.NODE_ENV === 'development') { }
       if (savedTab) {
         setActiveTab(savedTab);
       } else {
@@ -103,7 +103,7 @@ const RoomPage = React.memo(() => {
         }
 
         if (!validTabs.includes(savedTab)) {
-          if (process.env.NODE_ENV === 'development') {}
+          if (process.env.NODE_ENV === 'development') { }
           localStorage.removeItem(`room_${roomId}_activeTab`);
           setActiveTab('chat');
         }
@@ -135,7 +135,7 @@ const RoomPage = React.memo(() => {
 
     // Recalculate on window resize
     window.addEventListener('resize', updateHeaderHeight);
-    
+
     // Use ResizeObserver for more accurate height tracking
     let resizeObserver;
     if (headerRef.current && window.ResizeObserver) {
@@ -165,7 +165,7 @@ const RoomPage = React.memo(() => {
     const timeoutId2 = setTimeout(updateHeaderHeight, 200);
     const timeoutId3 = setTimeout(updateHeaderHeight, 500);
     const timeoutId4 = setTimeout(updateHeaderHeight, 1000); // For slow chat loading
-    
+
     // If chat tab is active, add extra delays for chat content loading
     let chatTimeout1, chatTimeout2;
     if (activeTab === 'chat') {
@@ -203,11 +203,11 @@ const RoomPage = React.memo(() => {
   const fetchRoomData = async () => {
     try {
       setLoading(true);
-      
+
       // Cache for better LCP performance
       const cacheKey = `room_${roomId}`;
       const cached = sessionStorage.getItem(cacheKey);
-      
+
       if (cached) {
         const { data, timestamp } = JSON.parse(cached);
         if (Date.now() - timestamp < 60000) { // 1 minute cache
@@ -221,21 +221,21 @@ const RoomPage = React.memo(() => {
               data: room,
               timestamp: Date.now()
             }));
-          }).catch(() => {});
+          }).catch(() => { });
           return;
         }
       }
-      
+
       const response = await apiService.get(`/rooms/${roomId}`);
       const room = response.data?.room || response.room || response.data || response;
       setRoomData(room);
-      
+
       // Cache the data
       sessionStorage.setItem(cacheKey, JSON.stringify({
         data: room,
         timestamp: Date.now()
       }));
-      
+
     } catch (error) {
       console.error('Error fetching room data:', error);
       if (error.response?.status === 404) {
@@ -254,11 +254,11 @@ const RoomPage = React.memo(() => {
         const response = await apiService.get(`/rooms/${roomId}`);
         roomInfo = response.data?.room || response.room || response.data || response;
       }
-      
+
       const currentUserMembership = roomInfo.members?.find(
         member => (member.user?.id || member.user_id || member.id) === user.id
       );
-      
+
       if (currentUserMembership) {
         setIsMember(true);
         setMembershipStatus(currentUserMembership.status || 'approved');
@@ -283,10 +283,10 @@ const RoomPage = React.memo(() => {
     try {
       const payload = password ? { password } : {};
       const response = await apiService.post(`/rooms/${roomId}/join`, payload);
-      
+
       await checkMembershipStatus();
       setShowJoinForm(false);
-      
+
       const message = response.data?.message || response.message;
       if (message) {
         showNotification(message);
@@ -308,22 +308,22 @@ const RoomPage = React.memo(() => {
     setLeaveLoading(true);
     try {
       await apiService.post(`/rooms/${roomId}/leave`);
-      
+
       // Update membership status
       setIsMember(false);
       setMembershipStatus(null);
       setShowLeaveConfirm(false);
-      
+
       showNotification('You have successfully left the room.');
-      
+
       // Refresh room data to update member count
       await fetchRoomData();
-      
+
       // Redirect to rooms page after a short delay
       setTimeout(() => {
         navigate('/user/rooms');
       }, 2000);
-      
+
     } catch (error) {
       console.error('Error leaving room:', error);
       const errorMessage = error.response?.data?.message || 'Failed to leave room';
@@ -398,22 +398,22 @@ const RoomPage = React.memo(() => {
     // Determine user role
     const getUserRole = () => {
       if (isOwner) return 'owner';
-      
+
       const currentUserMembership = roomData.members?.find(
         member => (member.user?.id || member.user_id) === user.id
       );
-      
+
       return currentUserMembership?.role || 'member';
     };
 
     const TabComponent = activeTabData.component;
-    
+
     // Only lazy load non-chat tabs to preserve your original chat design
     const isLazyTab = activeTab !== 'chat';
-    
+
     if (isLazyTab) {
       return (
-        <React.Suspense 
+        <React.Suspense
           fallback={
             <div className="p-6">
               <div className="animate-pulse space-y-4">
@@ -441,8 +441,8 @@ const RoomPage = React.memo(() => {
             </div>
           }
         >
-          <TabComponent 
-            room={roomData} 
+          <TabComponent
+            room={roomData}
             currentUser={user}
             user={user}
             isMember={isMember}
@@ -452,11 +452,11 @@ const RoomPage = React.memo(() => {
         </React.Suspense>
       );
     }
-    
+
     // Chat tab loads immediately without Suspense to preserve your design
     return (
-      <TabComponent 
-        room={roomData} 
+      <TabComponent
+        room={roomData}
         currentUser={user}
         user={user}
         isMember={isMember}
@@ -490,7 +490,7 @@ const RoomPage = React.memo(() => {
               </div>
             </div>
           </div>
-          
+
           {/* Tab Navigation Skeleton */}
           <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -505,19 +505,19 @@ const RoomPage = React.memo(() => {
               </div>
             </div>
           </div>
-          
+
           {/* Content Skeleton - Chat preview for better LCP with reserved space */}
           <div className="max-w-7xl mx-auto" style={{ minHeight: "400px" }}>
             <div className="p-6 space-y-4">
               {[...Array(4)].map((_, i) => (
-                <div 
-                  key={i} 
+                <div
+                  key={i}
                   className={`flex ${i % 2 === 0 ? 'justify-start' : 'justify-end'}`}
                   style={{ minHeight: "60px" }} // Reserve space to prevent CLS
                 >
                   <div className={`flex items-start space-x-3 max-w-xs ${i % 2 === 0 ? '' : 'flex-row-reverse space-x-reverse'}`}>
                     {i % 2 === 0 && (
-                      <div 
+                      <div
                         className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full"
                         style={{
                           width: "32px",
@@ -527,7 +527,7 @@ const RoomPage = React.memo(() => {
                         }}
                       ></div>
                     )}
-                    <div 
+                    <div
                       className={`p-3 rounded-lg ${i % 2 === 0 ? 'bg-gray-200 dark:bg-gray-700' : 'bg-blue-200 dark:bg-blue-800'}`}
                       style={{ minHeight: "48px", minWidth: "120px" }}
                     >
@@ -555,7 +555,7 @@ const RoomPage = React.memo(() => {
             The room you're looking for doesn't exist or you don't have access to it.
           </p>
           <button
-                            onClick={() => navigate('/user/rooms')}
+            onClick={() => navigate('/user/rooms')}
             className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200"
           >
             <ArrowLeftIcon className="w-4 h-4 mr-2" />
@@ -567,15 +567,14 @@ const RoomPage = React.memo(() => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="h-screen overflow-hidden bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Notification */}
       {notification && (
         <div className="fixed top-4 right-4 z-50">
-          <div className={`max-w-sm px-4 py-3 rounded-lg shadow-lg border ${
-            notification.type === 'success' 
-              ? 'bg-green-50 border-green-200 text-green-800'
-              : 'bg-red-50 border-red-200 text-red-800'
-          }`}>
+          <div className={`max-w-sm px-4 py-3 rounded-lg shadow-lg border ${notification.type === 'success'
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : 'bg-red-50 border-red-200 text-red-800'
+            }`}>
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium">{notification.message}</p>
               <button
@@ -590,7 +589,7 @@ const RoomPage = React.memo(() => {
       )}
 
       {/* Room Header - Fully Responsive */}
-      <div ref={headerRef} className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-20">
+      <div ref={headerRef} className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-20 flex-shrink-0">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
           {/* Desktop Layout (≥1024px): Horizontal */}
           <div className="hidden lg:flex items-center justify-between gap-4 py-4">
@@ -608,8 +607,8 @@ const RoomPage = React.memo(() => {
               {/* Room Image/Icon */}
               <div className="relative flex-shrink-0">
                 {roomData.image_url ? (
-                  <img 
-                    src={roomData.image_url} 
+                  <img
+                    src={roomData.image_url}
                     alt={roomData.name}
                     className="w-12 h-12 rounded-lg object-cover"
                     loading="eager"
@@ -625,7 +624,7 @@ const RoomPage = React.memo(() => {
                     </span>
                   </div>
                 )}
-                
+
                 {/* Commercial Badge */}
                 {roomData.is_commercial && (
                   <div className="absolute -top-1 -right-1">
@@ -642,15 +641,15 @@ const RoomPage = React.memo(() => {
                   <h1 className="text-xl font-bold text-gray-900 dark:text-white truncate">
                     {roomData.name}
                   </h1>
-                  
+
                   {/* Visibility Badge */}
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${getTypeBadgeColor()}`}>
                     {getTypeIcon()}
                     <span className="capitalize">{roomData.type}</span>
                   </span>
-                  
+
                   {/* Members Count */}
-                  <button 
+                  <button
                     onClick={() => setShowMembersModal(true)}
                     className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex-shrink-0"
                     title="View room members"
@@ -659,7 +658,7 @@ const RoomPage = React.memo(() => {
                     <span>{roomData.members_count || roomData.members?.length || 0} members</span>
                   </button>
                 </div>
-                
+
                 {roomData.description && (
                   <p className="mt-1.5 text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
                     {roomData.description}
@@ -705,7 +704,7 @@ const RoomPage = React.memo(() => {
               )}
 
               {isOwner && (
-                <button 
+                <button
                   onClick={() => navigate(`/user/rooms/${roomId}/manage`)}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-lg transition-colors duration-200 mr-2"
                 >
@@ -732,8 +731,8 @@ const RoomPage = React.memo(() => {
               {/* Room Image/Icon */}
               <div className="relative flex-shrink-0">
                 {roomData.image_url ? (
-                  <img 
-                    src={roomData.image_url} 
+                  <img
+                    src={roomData.image_url}
                     alt={roomData.name}
                     className="w-10 h-10 rounded-lg object-cover"
                     loading="eager"
@@ -749,7 +748,7 @@ const RoomPage = React.memo(() => {
                     </span>
                   </div>
                 )}
-                
+
                 {/* Commercial Badge */}
                 {roomData.is_commercial && (
                   <div className="absolute -top-0.5 -right-0.5">
@@ -767,7 +766,7 @@ const RoomPage = React.memo(() => {
 
               {/* Mobile Action Button - Compact Icon */}
               {isOwner && (
-                <button 
+                <button
                   onClick={() => navigate(`/user/rooms/${roomId}/manage`)}
                   className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors duration-200 touch-manipulation mr-2"
                   aria-label="Manage Room"
@@ -818,9 +817,9 @@ const RoomPage = React.memo(() => {
                 {getTypeIcon()}
                 <span className="capitalize">{roomData.type}</span>
               </span>
-              
+
               {/* Members Count */}
-              <button 
+              <button
                 onClick={() => setShowMembersModal(true)}
                 className="inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors touch-manipulation"
                 title="View room members"
@@ -834,7 +833,7 @@ const RoomPage = React.memo(() => {
       </div>
 
       {/* Tab Navigation */}
-      <RoomTabs 
+      <RoomTabs
         tabs={tabs}
         activeTab={activeTab}
         onTabChange={handleTabChange}
@@ -843,7 +842,7 @@ const RoomPage = React.memo(() => {
       />
 
       {/* Tab Content - Responsive */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6">
+      <div className="flex-1 min-h-0 overflow-hidden max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-6">
         {!isMember && !isOwner ? (
           <div className="p-8 text-center">
             <LockClosedIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -851,7 +850,7 @@ const RoomPage = React.memo(() => {
               {roomData.type === 'private' ? 'Request Access to Join' : 'Join This Room'}
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              {roomData.type === 'private' 
+              {roomData.type === 'private'
                 ? 'This is a private room. Send a request to the room owner for approval to access posts, chat, and other content.'
                 : 'Join this room to access posts, live chat, and interact with other members.'
               }
@@ -877,7 +876,7 @@ const RoomPage = React.memo(() => {
                   )
                 )}
               </button>
-              
+
               {roomData.type === 'public' && (
                 <p className="text-sm text-green-600 dark:text-green-400">
                   ✓ Public room - Instant access
@@ -915,7 +914,7 @@ const RoomPage = React.memo(() => {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex min-h-screen items-center justify-center px-4">
             <div className="fixed inset-0 bg-gray-500 bg-opacity-75" onClick={() => setShowLeaveConfirm(false)} />
-            
+
             <div className="relative bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
               <div className="flex items-center mb-4">
                 <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mr-3">
@@ -923,11 +922,11 @@ const RoomPage = React.memo(() => {
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Leave Room</h3>
               </div>
-              
+
               <p className="text-gray-600 dark:text-gray-400 mb-6">
                 Are you sure you want to leave "{roomData.name}"? You'll lose access to all posts, chats, and content in this room.
               </p>
-              
+
               <div className="flex space-x-3">
                 <button
                   onClick={() => setShowLeaveConfirm(false)}

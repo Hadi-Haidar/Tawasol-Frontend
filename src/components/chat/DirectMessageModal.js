@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
+import {
   XMarkIcon,
   PaperAirplaneIcon,
   FaceSmileIcon,
@@ -16,28 +16,9 @@ import Toast from '../common/Toast';
 import ImageLightbox from '../common/ImageLightbox';
 // Note: Using room-specific API calls instead of global directMessageApi service
 import websocketService from '../../services/websocket';
+import MessageBubble from './MessageBubble';
 
-// WhatsApp-style check mark components
-const SingleCheck = ({ className = "w-4 h-4 text-gray-400" }) => (
-  <svg className={className} viewBox="0 0 16 16" fill="currentColor">
-    <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
-  </svg>
-);
 
-const DoubleCheck = ({ isRead = false, className = "w-4 h-4" }) => (
-  <div className="flex items-center">
-    {/* First check mark */}
-    <svg className={`w-3 h-3 ${isRead ? 'text-blue-500' : 'text-gray-400'}`} viewBox="0 0 16 16" fill="currentColor">
-      <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
-    </svg>
-    {/* Tiny space between check marks */}
-    <div className="w-px"></div>
-    {/* Second check mark */}
-    <svg className={`w-3 h-3 ${isRead ? 'text-blue-500' : 'text-gray-400'}`} viewBox="0 0 16 16" fill="currentColor">
-      <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
-    </svg>
-  </div>
-);
 
 const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) => {
   const [messages, setMessages] = useState([]);
@@ -46,26 +27,26 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
   const [conversationId, setConversationId] = useState(null);
+  const conversationIdRef = useRef(null); // Ref to track conversation ID for WebSocket callbacks
   const [typingUsers, setTypingUsers] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [toast, setToast] = useState({ message: '', type: 'info', isVisible: false });
-  
+
   // Message interaction states
-  const [hoveredMessageId, setHoveredMessageId] = useState(null);
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingText, setEditingText] = useState('');
   const [deletingMessageId, setDeletingMessageId] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [messageToDelete, setMessageToDelete] = useState(null);
-  
+
   // Image upload states
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
-  
+
   // Image lightbox states
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImage, setLightboxImage] = useState(null);
-  
+
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -105,7 +86,7 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
   // Save edited message
   const saveEditMessage = useCallback(async () => {
     if (!editingText.trim() || !editingMessageId) return;
-    
+
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api'}/rooms/${room.id}/direct-messages/edit/${editingMessageId}`, {
         method: 'PUT',
@@ -124,18 +105,18 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
       }
 
       const data = await response.json();
-      
+
       // Update the message in local state
-      setMessages(prev => prev.map(msg => 
-        msg.id === editingMessageId 
-                          ? { ...msg, message: editingText, updated_at: new Date().toISOString() }
+      setMessages(prev => prev.map(msg =>
+        msg.id === editingMessageId
+          ? { ...msg, message: editingText, updated_at: new Date().toISOString() }
           : msg
       ));
-      
+
       setEditingMessageId(null);
       setEditingText('');
       showToast('Message updated successfully', 'success');
-      
+
     } catch (error) {
       console.error('Failed to edit message:', error);
       showToast('Failed to edit message. Please try again.', 'error');
@@ -145,9 +126,9 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
   // Delete a message
   const deleteMessage = useCallback(async (messageId) => {
     if (!messageId) return;
-    
+
     setDeletingMessageId(messageId);
-    
+
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api'}/rooms/${room.id}/direct-messages/delete/${messageId}`, {
         method: 'DELETE',
@@ -165,7 +146,7 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
       // Remove the message from local state immediately
       setMessages(prev => prev.filter(msg => msg.id !== messageId));
       showToast('Message deleted successfully', 'success');
-      
+
     } catch (error) {
       console.error('Failed to delete message:', error);
       showToast('Failed to delete message. Please try again.', 'error');
@@ -214,15 +195,15 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
   // Handle typing indicator with debouncing
   const handleTypingIndicator = useCallback((value) => {
     if (!targetUser?.id || !isConnected) return;
-    
+
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-    
+
     if (value.trim()) {
       const now = Date.now();
       const lastSent = typingTimeoutRef.lastSent || 0;
-      
+
       // Only send typing indicator every 2 seconds max
       if (now - lastSent > 2000) {
         fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api'}/rooms/${room.id}/direct-messages/typing/${targetUser.id}`, {
@@ -236,7 +217,7 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
         }).catch(error => console.error('Failed to send typing indicator:', error));
         typingTimeoutRef.lastSent = now;
       }
-      
+
       // Auto-stop after 4 seconds
       typingTimeoutRef.current = setTimeout(() => {
         fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api'}/rooms/${room.id}/direct-messages/typing/${targetUser.id}`, {
@@ -269,11 +250,11 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
   // Initialize direct message conversation
   const initializeDirectMessage = useCallback(async () => {
     if (!targetUser?.id || !currentUser?.id || !room?.id) return;
-    
+
     try {
       setLoading(true);
       setError(null);
-      
+
       // Get conversation with target user in this room
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api'}/rooms/${room.id}/direct-messages/conversations/${targetUser.id}`, {
         headers: {
@@ -281,11 +262,11 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
           'Accept': 'application/json',
         },
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to load conversation');
       }
-      
+
       const data = await response.json();
       // Ensure all messages have proper read status when initially loaded
       const messagesWithReadStatus = (data.messages || []).map(msg => ({
@@ -294,124 +275,16 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
       }));
       setMessages(messagesWithReadStatus);
       setConversationId(data.conversation_id);
-      
-      // Initialize WebSocket on user's private channel
-      const token = localStorage.getItem('token');
-      if (token) {
-        websocketService.initialize(token);
-        
-        // Subscribe to user's private channel for direct messages using Laravel Echo
-        const echo = websocketService.getEcho();
-        if (echo) {
-          const userChannel = echo.private(`user.${currentUser.id}`);
-          
-          // Listen for new direct messages (use dot prefix for custom event names)
-          userChannel.listen('.direct.message.sent', (event) => {
-            if (event?.message && event.conversation_id === data.conversation_id) {
-              // Prevent duplicate messages by checking if message ID already exists
-              setMessages(prev => {
-                const exists = prev.some(msg => msg.id === event.message.id);
-                if (!exists) {
-                  // New messages start with read status based on who sent them
-                  const messageWithReadStatus = {
-                    ...event.message,
-                    is_read: event.message.sender_id !== currentUser.id ? false : event.message.is_read || false
-                  };
-                  return [messageWithReadStatus, ...prev];
-                } else {
-                  // Update existing message if it was edited, preserving read status
-                  return prev.map(msg => 
-                    msg.id === event.message.id ? { ...msg, ...event.message } : msg
-                  );
-                }
-              });
-              
-              // Auto-mark as read if message is from the other user (not current user)
-              if (event.message.sender_id !== currentUser.id) {
-                // Mark as read immediately since user is actively viewing the chat
-                setTimeout(() => {
-                  markMessagesAsRead();
-                }, 100);
-              }
-              
-              setTimeout(scrollToBottom, 100);
-            }
-          });
+      conversationIdRef.current = data.conversation_id;
 
-          // Listen for message edits (use dot prefix for custom event names)
-          userChannel.listen('.direct.message.edited', (event) => {
-            if (event?.message && event.conversation_id === data.conversation_id) {
-              setMessages(prev => prev.map(msg => 
-                msg.id === event.message.id ? event.message : msg
-              ));
-            }
-          });
-
-          // Listen for message deletions (use dot prefix for custom event names)
-          userChannel.listen('.direct.message.deleted', (event) => {
-            if (event?.message_id && event.conversation_id === data.conversation_id) {
-              setMessages(prev => prev.filter(msg => msg.id !== event.message_id));
-            }
-          });
-
-          // Listen for typing indicators (use dot prefix for custom event names)
-          userChannel.listen('.direct.message.typing', (event) => {
-            if (event?.conversation_id === data.conversation_id && event.sender.id !== currentUser.id) {
-              setTypingUsers(prev => {
-                if (event.is_typing) {
-                  const isAlreadyTyping = prev.some(u => u.id === event.sender.id);
-                  return isAlreadyTyping ? prev : [...prev, event.sender];
-                } else {
-                  return prev.filter(u => u.id !== event.sender.id);
-                }
-              });
-              
-              // Auto-remove typing indicator
-              if (event.is_typing) {
-                setTimeout(() => {
-                  setTypingUsers(prev => prev.filter(u => u.id !== event.sender.id));
-                }, 6000);
-              }
-            }
-          });
-
-          // Listen for message read events to update check marks in real-time (use dot prefix for custom event names)
-          userChannel.listen('.direct.message.read', (event) => {
-            if (event?.conversation_id === data.conversation_id) {
-              // Update read status for messages when they are read
-              setMessages(prev => {
-                let updatedCount = 0;
-                const updated = prev.map(msg => {
-                  // Mark as read if this message was sent by current user to target user
-                  // and the event indicates target user read messages from current user
-                  if (msg.sender_id === currentUser.id && 
-                      msg.receiver_id === targetUser.id && 
-                      event.sender_id === currentUser.id && 
-                      event.receiver_id === targetUser.id && 
-                      !msg.is_read) {
-                    updatedCount++;
-                    return { ...msg, is_read: true };
-                  }
-                  return msg;
-                });
-                
-                if (updatedCount > 0) {}
-                
-                return updated;
-              });
-            }
-          });
-        }
-      }
-      
       setIsConnected(true);
       setTimeout(scrollToBottom, 200);
-      
+
       // Show success toast for new conversations
       if (response.messages && response.messages.length === 0) {
         showToast(`Direct message conversation with ${targetUser.name} started!`, 'success');
       }
-      
+
     } catch (error) {
       console.error('Failed to initialize direct message:', error);
       setError('Failed to load conversation. Please try again.');
@@ -421,15 +294,117 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
     }
   }, [targetUser?.id, currentUser?.id, room?.id, scrollToBottom, showToast]);
 
+  // WebSocket Subscription Effect - Handled separately from data loading
+  useEffect(() => {
+    if (!currentUser?.id || !targetUser?.id) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    // Initialize Echo
+    websocketService.initialize(token);
+    const echo = websocketService.getEcho();
+    if (!echo) return;
+
+    const channelName = `user.${currentUser.id}`;
+    // Using 'private' gets the channel. If it exists, it reuses it (important for sharing with RoomDirectMessages)
+    const userChannel = echo.private(channelName);
+
+    // Handler: Message Sent
+    const handleMessageSent = (event) => {
+      console.log('[DM] New message event received:', event);
+      if (event?.message && event.conversation_id === conversationIdRef.current) {
+        setMessages(prev => {
+          const exists = prev.some(msg => msg.id === event.message.id);
+          if (!exists) {
+            const messageWithReadStatus = {
+              ...event.message,
+              is_read: event.message.sender_id !== currentUser.id ? false : event.message.is_read || false
+            };
+            return [messageWithReadStatus, ...prev];
+          }
+          // Update existing message (e.g. valid edit that came as sent?)
+          return prev.map(msg => msg.id === event.message.id ? { ...msg, ...event.message } : msg);
+        });
+
+        setTimeout(scrollToBottom, 100);
+      }
+    };
+
+    // Handler: Message Edited
+    const handleMessageEdited = (event) => {
+      if (event?.message && event.conversation_id === conversationIdRef.current) {
+        setMessages(prev => prev.map(msg => msg.id === event.message.id ? event.message : msg));
+      }
+    };
+
+    // Handler: Message Deleted
+    const handleMessageDeleted = (event) => {
+      if (event?.message_id && event.conversation_id === conversationIdRef.current) {
+        setMessages(prev => prev.filter(msg => msg.id !== event.message_id));
+      }
+    };
+
+    // Handler: Typing
+    const handleTyping = (event) => {
+      if (event?.conversation_id === conversationIdRef.current && event.sender.id !== currentUser.id) {
+        setTypingUsers(prev => {
+          if (event.is_typing) {
+            return prev.some(u => u.id === event.sender.id) ? prev : [...prev, event.sender];
+          } else {
+            return prev.filter(u => u.id !== event.sender.id);
+          }
+        });
+        if (event.is_typing) {
+          setTimeout(() => setTypingUsers(prev => prev.filter(u => u.id !== event.sender.id)), 6000);
+        }
+      }
+    };
+
+    // Handler: Read
+    const handleRead = (event) => {
+      console.log('[DM] Read event received:', event);
+      if (event?.conversation_id === conversationIdRef.current) {
+        if (event.receiver_id === targetUser.id && event.sender_id === currentUser.id) {
+          setMessages(prev => prev.map(msg =>
+            (msg.sender_id === currentUser.id && msg.receiver_id === targetUser.id && !msg.is_read)
+              ? { ...msg, is_read: true } : msg
+          ));
+        }
+      }
+    };
+
+    // Subscribe
+    userChannel.listen('.direct.message.sent', handleMessageSent);
+    userChannel.listen('.direct.message.edited', handleMessageEdited);
+    userChannel.listen('.direct.message.deleted', handleMessageDeleted);
+    userChannel.listen('.direct.message.typing', handleTyping);
+    userChannel.listen('.direct.message.read', handleRead);
+
+    // Cleanup: Remove specific listeners using stopListening
+    return () => {
+      // Note: We use stopListening(event, handler) to remove ONLY our handlers
+      // This preserves listeners from other components (RoomDirectMessages) on the same channel
+      if (userChannel) {
+        userChannel.stopListening('.direct.message.sent', handleMessageSent);
+        userChannel.stopListening('.direct.message.edited', handleMessageEdited);
+        userChannel.stopListening('.direct.message.deleted', handleMessageDeleted);
+        userChannel.stopListening('.direct.message.typing', handleTyping);
+        userChannel.stopListening('.direct.message.read', handleRead);
+      }
+    };
+
+  }, [currentUser?.id, targetUser?.id, scrollToBottom]);
+
   // Send message
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if ((!newMessage.trim() && !selectedImage) || sending || !targetUser?.id) return;
-    
+
     try {
       setSending(true);
       setError(null);
-      
+
       // Stop typing indicator
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -446,16 +421,16 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
         }).catch(console.error);
         typingTimeoutRef.lastSent = 0;
       }
-      
+
       // Prepare form data for potential file upload
       const formData = new FormData();
       formData.append('message', newMessage || '');
       formData.append('type', selectedImage ? 'image' : 'text');
-      
+
       if (selectedImage) {
         formData.append('file', selectedImage);
       }
-      
+
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api'}/rooms/${room.id}/direct-messages/send/${targetUser.id}`, {
         method: 'POST',
         headers: {
@@ -464,13 +439,13 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
         },
         body: formData,
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to send message');
       }
 
       const responseData = await response.json();
-      
+
       // Optimistic update: Add the message immediately to sender's interface
       if (responseData.message) {
         setMessages(prev => {
@@ -487,11 +462,11 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
         });
         setTimeout(scrollToBottom, 100);
       }
-      
+
       setNewMessage('');
       clearSelectedImage();
       setTimeout(() => inputRef.current?.focus(), 100);
-      
+
     } catch (error) {
       console.error('Failed to send message:', error);
       setError('Failed to send message. Please try again.');
@@ -504,7 +479,7 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
   // Function to mark messages as read
   const markMessagesAsRead = useCallback(async () => {
     if (!targetUser?.id || !room?.id) return;
-    
+
     try {
       await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000/api'}/rooms/${room.id}/direct-messages/conversations/${targetUser.id}/read`, {
         method: 'POST',
@@ -533,15 +508,15 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
         showToast('Please select an image file', 'error');
         return;
       }
-      
+
       // Validate file size (10MB max)
       if (file.size > 10 * 1024 * 1024) {
         showToast('Image size must be less than 10MB', 'error');
         return;
       }
-      
+
       setSelectedImage(file);
-      
+
       // Create preview
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -588,15 +563,15 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
       setMessageToDelete(null);
       setError(null);
       clearSelectedImage();
-      
+
       initializeDirectMessage();
-      
+
       // Focus input after a delay
       setTimeout(() => {
         inputRef.current?.focus();
       }, 500);
     }
-    
+
     return () => {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -612,21 +587,17 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
           body: JSON.stringify({ is_typing: false }),
         }).catch(console.error);
       }
-      
+
       // Mark all messages as read when leaving the chat
       if (targetUser?.id && room?.id) {
         markMessagesAsRead();
       }
-      
+
       if (currentUser?.id) {
-        // Unsubscribe from user's private channel using Echo
-        const echo = websocketService.getEcho();
-        if (echo) {
-          echo.leave(`user.${currentUser.id}`);
-        }
+        // Do NOT unsubscribe here with echo.leave() as it kills the channel for RoomDirectMessages
+        // The new useEffect handles specific listener cleanup via stopListening
       }
       // Clean up all state
-      setMessages([]);
       setTypingUsers([]);
       setIsConnected(false);
       setEditingMessageId(null);
@@ -645,12 +616,32 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
+  // Mark messages as read when user is viewing the chat and there are unread messages from target user
+  useEffect(() => {
+    if (isOpen && messages.length > 0 && targetUser?.id && room?.id) {
+      // Check if there are any unread messages FROM the target user (not from current user)
+      const hasUnreadFromTargetUser = messages.some(
+        msg => msg.sender_id === targetUser.id && msg.receiver_id === currentUser?.id && !msg.is_read
+      );
+
+      if (hasUnreadFromTargetUser) {
+        // Debounce the read call to avoid spamming
+        const readTimeout = setTimeout(() => {
+          markMessagesAsRead();
+          console.log('[DM] Marked messages as read');
+        }, 500);
+
+        return () => clearTimeout(readTimeout);
+      }
+    }
+  }, [isOpen, messages, targetUser?.id, currentUser?.id, room?.id, markMessagesAsRead]);
+
   if (!isOpen || !targetUser) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl h-[600px] flex flex-col">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700 rounded-t-xl">
           <div className="flex items-center space-x-3">
@@ -661,9 +652,9 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
             >
               <ArrowLeftIcon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
             </button>
-            
+
             <Avatar user={targetUser} size="md" showBorder={true} />
-            
+
             <div>
               <h3 className="font-semibold text-gray-900 dark:text-white">
                 {targetUser.name}
@@ -677,7 +668,7 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
               </p>
             </div>
           </div>
-          
+
           <button
             onClick={handleClose}
             className="p-2 hover:bg-white/50 dark:hover:bg-gray-600 rounded-lg transition-colors"
@@ -728,201 +719,36 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
                 const isOwn = message.sender_id === currentUser?.id;
                 const isEditing = editingMessageId === message.id;
                 const isDeleting = deletingMessageId === message.id;
-                
-                return (
-                  <div 
-                    key={message.id} 
-                    className={`mb-4 group ${isDeleting ? 'opacity-50' : ''}`}
-                    onMouseEnter={() => setHoveredMessageId(message.id)}
-                    onMouseLeave={() => setHoveredMessageId(null)}
-                  >
-                    {isOwn ? (
-                      // Sent Messages (Right Side)
-                      <div className="flex justify-end">
-                        <div className="flex items-end space-x-2 max-w-xs lg:max-w-md relative">
-                          {/* Edit/Delete Actions */}
-                          {isOwn && hoveredMessageId === message.id && !isEditing && !isDeleting && deletingMessageId !== message.id && (
-                            <div className="absolute -left-8 top-0 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                              {/* Edit Button - Only for text messages, not images */}
-                              {message.type !== 'image' && (
-                                <button
-                                  onClick={() => startEditMessage(message)}
-                                  className="w-6 h-6 bg-gray-800 bg-opacity-70 hover:bg-opacity-90 text-white rounded-full flex items-center justify-center transition-all duration-200"
-                                  title="Edit message"
-                                >
-                                  <PencilIcon className="w-3 h-3" />
-                                </button>
-                              )}
-                              <button
-                                onClick={() => showDeleteConfirmation(message.id)}
-                                disabled={deletingMessageId === message.id}
-                                className="w-6 h-6 bg-red-500 bg-opacity-70 hover:bg-opacity-90 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-full flex items-center justify-center transition-all duration-200"
-                                title={deletingMessageId === message.id ? "Deleting..." : "Delete message"}
-                              >
-                                {deletingMessageId === message.id ? (
-                                  <div className="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent"></div>
-                                ) : (
-                                  <TrashIcon className="w-3 h-3" />
-                                )}
-                              </button>
-                            </div>
-                          )}
 
-                          <div className="text-right flex-1">
-                            {/* Message Bubble */}
-                            {isEditing ? (
-                              <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-2xl rounded-br-md shadow-sm border-2 border-blue-500">
-                                <div className="flex items-center space-x-2">
-                                  <textarea
-                                    value={editingText}
-                                    onChange={(e) => setEditingText(e.target.value)}
-                                    className="flex-1 text-sm bg-transparent text-gray-900 dark:text-white resize-none focus:outline-none"
-                                    rows={Math.min(editingText.split('\n').length, 4)}
-                                    autoFocus
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter' && !e.shiftKey) {
-                                        e.preventDefault();
-                                        saveEditMessage();
-                                      } else if (e.key === 'Escape') {
-                                        cancelEditMessage();
-                                      }
-                                    }}
-                                  />
-                                  <div className="flex flex-col space-y-1">
-                                    <button
-                                      onClick={saveEditMessage}
-                                      className="w-6 h-6 bg-green-500 hover:bg-green-600 text-white rounded-full flex items-center justify-center transition-colors"
-                                      title="Save changes"
-                                    >
-                                      <CheckIcon className="w-3 h-3" />
-                                    </button>
-                                    <button
-                                      onClick={cancelEditMessage}
-                                      className="w-6 h-6 bg-gray-500 hover:bg-gray-600 text-white rounded-full flex items-center justify-center transition-colors"
-                                      title="Cancel"
-                                    >
-                                      <XMarkIcon className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="bg-blue-500 text-white p-3 rounded-2xl rounded-br-md shadow-sm">
-                                {message.type === 'image' && message.file_url ? (
-                                  <div>
-                                    <img 
-                                      src={message.file_url} 
-                                      alt="Image message" 
-                                      className="w-full max-w-xs rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                      onClick={() => openLightbox(message.file_url, "Image message")}
-                                      title="Click to view full size"
-                                    />
-                                    {message.message && (
-                                      <p className="text-sm mt-2 whitespace-pre-wrap break-words">
-                                        {message.message}
-                                      </p>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <p className="text-sm whitespace-pre-wrap break-words">
-                                    {message.message}
-                                  </p>
-                                )}
-                                {message.is_edited && (
-                                  <p className="text-xs text-blue-200 mt-1 italic">edited</p>
-                                )}
-                              </div>
-                            )}
-                            {/* Timestamp with Read Receipts */}
-                            <div className="flex items-center justify-end space-x-1 mt-1">
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                {message.created_at ? formatDistanceToNow(new Date(message.created_at), { addSuffix: true }) : 'Unknown time'}
-                              </span>
-                              {/* Read Receipt Check Marks */}
-                              <div className="flex-shrink-0">
-                                {message.is_read ? (
-                                  <DoubleCheck isRead={true} className="w-3 h-3" />
-                                ) : (
-                                  <SingleCheck className="w-3 h-3 text-gray-400" />
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          {/* Your Avatar */}
-                          <div className="flex-shrink-0 mb-1">
-                            <Avatar 
-                              user={currentUser}
-                              size="sm"
-                              showBorder={true}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      // Received Messages (Left Side)
-                      <div className="flex justify-start">
-                        <div className="flex items-end space-x-2 max-w-xs lg:max-w-md">
-                          {/* Their Avatar */}
-                          <div className="flex-shrink-0 mb-1">
-                            <Avatar 
-                              user={targetUser}
-                              size="sm"
-                              showBorder={true}
-                            />
-                          </div>
-                          <div>
-                            {/* Sender Name & Timestamp */}
-                            <div className="flex items-baseline space-x-2 mb-1">
-                              <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                {targetUser?.name || 'Unknown User'}
-                              </span>
-                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                {message.created_at ? formatDistanceToNow(new Date(message.created_at), { addSuffix: true }) : 'Unknown time'}
-                              </span>
-                            </div>
-                            {/* Message Bubble */}
-                            <div className="bg-white dark:bg-gray-700 text-gray-900 dark:text-white p-3 rounded-2xl rounded-bl-md shadow-sm border border-gray-200 dark:border-gray-600">
-                              {message.type === 'image' && message.file_url ? (
-                                <div>
-                                  <img 
-                                    src={message.file_url} 
-                                    alt="Image message" 
-                                    className="w-full max-w-xs rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                    onClick={() => openLightbox(message.file_url, "Image message")}
-                                    title="Click to view full size"
-                                  />
-                                  {message.message && (
-                                    <p className="text-sm mt-2 whitespace-pre-wrap break-words">
-                                      {message.message}
-                                    </p>
-                                  )}
-                                </div>
-                              ) : (
-                                <p className="text-sm whitespace-pre-wrap break-words">
-                                  {message.message}
-                                </p>
-                              )}
-                              {message.is_edited && (
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 italic">edited</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                return (
+                  <MessageBubble
+                    key={message.id}
+                    message={message}
+                    currentUser={currentUser}
+                    targetUser={targetUser}
+                    isOwn={isOwn}
+                    isEditing={isEditing}
+                    isDeleting={isDeleting}
+                    editingText={editingText}
+                    setEditingText={setEditingText}
+                    onStartEdit={startEditMessage}
+                    onSaveEdit={saveEditMessage}
+                    onCancelEdit={cancelEditMessage}
+                    onDelete={showDeleteConfirmation}
+                    onImageClick={openLightbox}
+                  />
                 );
               })}
-              
+
               {/* Typing Indicator */}
               {typingUsers.length > 0 && (
                 <div className="flex justify-start">
                   <div className="flex items-end space-x-2 max-w-xs lg:max-w-md">
                     {/* Show avatar of the person who is typing */}
                     <div className="flex-shrink-0 mb-1">
-                      <Avatar 
-                        user={typingUsers[0]} 
-                        size="sm" 
+                      <Avatar
+                        user={typingUsers[0]}
+                        size="sm"
                         showBorder={true}
                       />
                     </div>
@@ -943,7 +769,7 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
                   </div>
                 </div>
               )}
-              
+
               <div ref={messagesEndRef} />
             </>
           )}
@@ -960,13 +786,13 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
               onChange={handleImageSelect}
               className="hidden"
             />
-            
+
             {/* Image Preview */}
             {imagePreview && (
               <div className="mb-3 relative inline-block">
-                <img 
-                  src={imagePreview} 
-                  alt="Preview" 
+                <img
+                  src={imagePreview}
+                  alt="Preview"
                   className="w-20 h-20 object-cover rounded-lg border border-gray-200 dark:border-gray-600"
                 />
                 <button
@@ -979,7 +805,7 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
                 </button>
               </div>
             )}
-            
+
             <form onSubmit={handleSendMessage} className="flex items-end space-x-3">
               <div className="flex-1 relative">
                 <div className="bg-gray-50 dark:bg-gray-700 rounded-2xl border border-gray-200 dark:border-gray-600 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-opacity-20 transition-all duration-200">
@@ -989,11 +815,11 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
                     onChange={(e) => {
                       const value = e.target.value;
                       setNewMessage(value);
-                      
+
                       // Auto-resize
                       e.target.style.height = 'auto';
                       e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
-                      
+
                       // Handle typing indicator
                       handleTypingIndicator(value);
                     }}
@@ -1009,7 +835,7 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
                     style={{ minHeight: '48px', maxHeight: '100px', lineHeight: '1.5' }}
                     disabled={sending}
                   />
-                  
+
                   <div className="absolute right-2 bottom-2 flex items-center space-x-1">
                     <button
                       type="button"
@@ -1031,7 +857,7 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
                   </div>
                 </div>
               </div>
-              
+
               <button
                 type="submit"
                 disabled={(!newMessage.trim() && !selectedImage) || sending}
@@ -1056,15 +882,15 @@ const DirectMessageModal = ({ targetUser, currentUser, room, isOpen, onClose }) 
             <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 dark:bg-red-900/30 rounded-full">
               <TrashIcon className="w-6 h-6 text-red-600 dark:text-red-400" />
             </div>
-            
+
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white text-center mb-2">
               Delete Message
             </h3>
-            
+
             <p className="text-gray-600 dark:text-gray-400 text-center mb-6">
               Are you sure you want to delete this message? This action cannot be undone.
             </p>
-            
+
             <div className="flex space-x-3">
               <button
                 onClick={handleDeleteCancel}

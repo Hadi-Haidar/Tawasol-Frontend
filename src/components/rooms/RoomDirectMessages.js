@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   ChatBubbleLeftRightIcon,
   UserIcon,
   ClockIcon,
@@ -45,7 +45,7 @@ const roomDirectMessageApi = {
     const formData = new FormData();
     formData.append('message', message);
     formData.append('type', type);
-    
+
     if (file) {
       formData.append('file', file);
     }
@@ -98,14 +98,14 @@ const RoomDirectMessages = ({ room, currentUser }) => {
   // Load conversations
   const loadConversations = async () => {
     if (!room?.id) return;
-    
+
     try {
       setLoading(true);
       setError('');
-      
+
       const data = await roomDirectMessageApi.getRoomConversations(room.id);
       setConversations(data.conversations || []);
-      
+
     } catch (error) {
       console.error('Failed to load conversations:', error);
       setError('Failed to load conversations. Please try again.');
@@ -118,17 +118,17 @@ const RoomDirectMessages = ({ room, currentUser }) => {
   // Load room members
   const loadRoomMembers = async () => {
     if (!room?.id) return;
-    
+
     try {
       setMembersLoading(true);
       setError('');
-      
+
       const data = await roomDirectMessageApi.getRoomMembers(room.id);
       if (data.success) {
         setRoomMembers(data.members || []);
         setRoomData(data.room || {});
       }
-      
+
     } catch (error) {
       console.error('Failed to load room members:', error);
       setError('Failed to load room members. Please try again.');
@@ -141,12 +141,12 @@ const RoomDirectMessages = ({ room, currentUser }) => {
   // Handle real-time direct message updates
   const handleDirectMessageUpdate = (event) => {
     if (!event?.message || event.message.room_id !== room?.id) return;
-    
+
     const message = event.message;
-    const isNewConversation = !conversations.some(conv => 
+    const isNewConversation = !conversations.some(conv =>
       conv.other_user.id === (message.sender_id === currentUser?.id ? message.receiver_id : message.sender_id)
     );
-    
+
     if (isNewConversation) {
       // Reload conversations to include new conversation
       loadConversations();
@@ -170,12 +170,13 @@ const RoomDirectMessages = ({ room, currentUser }) => {
   // Handle messages being marked as read
   const handleMessageRead = (event) => {
     if (!event?.sender_id || !event?.receiver_id || event.room_id !== room?.id) return;
-    
+
     // Update conversation unread count when messages are read
-    // The sender_id in the event is the original sender of the messages that were marked as read
+    // Backend sends: receiver_id = who did the reading, sender_id = whose messages were read
+    // When the CURRENT USER reads messages from someone, we reset unread count for that conversation
     setConversations(prev => prev.map(conv => {
-      // If the current user is the receiver and this conversation is with the sender,
-      // then reset the unread count since messages from this sender were marked as read
+      // If current user did the reading (receiver_id) and this conversation is with the sender
+      // then reset the unread count since we just read their messages
       if (event.receiver_id === currentUser?.id && conv.other_user.id === event.sender_id) {
         return {
           ...conv,
@@ -258,21 +259,53 @@ const RoomDirectMessages = ({ room, currentUser }) => {
     const echo = websocketService.getEcho();
     if (echo) {
       const userChannel = echo.private(`user.${currentUser.id}`);
-      
+
       // Listen for direct message events (use dot prefix for custom event names)
       userChannel.listen('.direct.message.sent', handleDirectMessageUpdate);
-      
+
       // Listen for message read events (use dot prefix for custom event names)
       userChannel.listen('.direct.message.read', handleMessageRead);
+
+      // Listen for message deletion events to update unread count if needed
+      userChannel.listen('.direct.message.deleted', (event) => {
+        if (!event || event.room_id !== room?.id) return;
+
+        setConversations(prev => prev.map(conv => {
+          const isRelevant = conv.other_user.id === event.sender_id || conv.other_user.id === event.receiver_id;
+
+          if (isRelevant) {
+            let updates = {};
+
+            if (event.was_unread && event.receiver_id === currentUser.id && conv.other_user.id === event.sender_id) {
+              updates.unread_count = Math.max(0, conv.unread_count - 1);
+            }
+
+            if (conv.last_message && conv.last_message.id === event.message_id) {
+              updates.last_message = {
+                ...conv.last_message,
+                message: 'Message deleted',
+                is_deleted: true
+              };
+            }
+
+            if (Object.keys(updates).length > 0) {
+              return { ...conv, ...updates };
+            }
+          }
+          return conv;
+        }));
+      });
 
       return () => {
         // Cleanup WebSocket listeners - Echo handles cleanup automatically when leaving channel
         echo.leave(`user.${currentUser.id}`);
       };
     }
-    
-    return () => {};
-  }, [room?.id, currentUser?.id, conversations]);
+
+    return () => { };
+    // Note: conversations removed from dependencies to prevent constant re-subscriptions
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.id, currentUser?.id]);
 
   if (!room) return null;
 
@@ -325,7 +358,7 @@ const RoomDirectMessages = ({ room, currentUser }) => {
                       </div>
                       <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-16"></div>
                     </div>
-                    
+
                     <div className="flex items-center space-x-2">
                       <div className="w-3 h-3 bg-gray-300 dark:bg-gray-600 rounded"></div>
                       <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-32"></div>
@@ -350,20 +383,18 @@ const RoomDirectMessages = ({ room, currentUser }) => {
         <div className="flex gap-1 sm:gap-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
           <button
             onClick={() => setActiveView('conversations')}
-            className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2 px-2 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-colors touch-manipulation min-h-[44px] sm:min-h-0 ${
-              activeView === 'conversations'
-                ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-            }`}
+            className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2 px-2 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-colors touch-manipulation min-h-[44px] sm:min-h-0 ${activeView === 'conversations'
+              ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
           >
             <ChatBubbleLeftRightIcon className="w-4 h-4 flex-shrink-0" />
             <span className="truncate">Conversations</span>
             {conversations.length > 0 && (
-              <span className={`px-1.5 py-0.5 rounded-full text-xs flex-shrink-0 ${
-                activeView === 'conversations'
-                  ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400'
-                  : 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-400'
-              }`}>
+              <span className={`px-1.5 py-0.5 rounded-full text-xs flex-shrink-0 ${activeView === 'conversations'
+                ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400'
+                : 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-400'
+                }`}>
                 {conversations.length}
               </span>
             )}
@@ -373,28 +404,26 @@ const RoomDirectMessages = ({ room, currentUser }) => {
               </span>
             )}
           </button>
-          
+
           <button
             onClick={() => setActiveView('members')}
-            className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2 px-2 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-colors touch-manipulation min-h-[44px] sm:min-h-0 ${
-              activeView === 'members'
-                ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-            }`}
+            className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2 px-2 sm:px-3 rounded-md text-xs sm:text-sm font-medium transition-colors touch-manipulation min-h-[44px] sm:min-h-0 ${activeView === 'members'
+              ? 'bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
           >
             <UsersIcon className="w-4 h-4 flex-shrink-0" />
             <span className="truncate">Members</span>
             {roomMembers.length > 0 && (
-              <span className={`px-1.5 py-0.5 rounded-full text-xs flex-shrink-0 ${
-                activeView === 'members'
-                  ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400'
-                  : 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-400'
-              }`}>
+              <span className={`px-1.5 py-0.5 rounded-full text-xs flex-shrink-0 ${activeView === 'members'
+                ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400'
+                : 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-400'
+                }`}>
                 {roomMembers.length}
               </span>
             )}
           </button>
-          
+
           {/* Refresh Button - Moved to Tab Bar */}
           <button
             onClick={() => {
@@ -477,7 +506,7 @@ const RoomDirectMessages = ({ room, currentUser }) => {
                             <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
                               {conversation.other_user?.name}
                             </h4>
-                            
+
                             {/* Role badges for conversation participants */}
                             <div className="flex items-center gap-1 flex-shrink-0">
                               {/* Check if other user is the room owner */}
@@ -497,24 +526,23 @@ const RoomDirectMessages = ({ room, currentUser }) => {
                               )}
                             </div>
                           </div>
-                          
+
                           <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center flex-shrink-0">
                             <ClockIcon className="w-3 h-3 mr-1 hidden sm:block" />
                             {conversation.last_message?.created_at && formatDistanceToNow(
-                              new Date(conversation.last_message.created_at), 
+                              new Date(conversation.last_message.created_at),
                               { addSuffix: true }
                             )}
                           </span>
                         </div>
-                        
+
                         {conversation.last_message && (
                           <div className="flex items-center gap-2">
                             <UserIcon className="w-3 h-3 text-gray-400 flex-shrink-0 hidden sm:block" />
-                            <p className={`text-xs truncate ${
-                              conversation.unread_count > 0 
-                                ? 'font-medium text-gray-900 dark:text-white' 
-                                : 'text-gray-600 dark:text-gray-400'
-                            }`}>
+                            <p className={`text-xs truncate ${conversation.unread_count > 0
+                              ? 'font-medium text-gray-900 dark:text-white'
+                              : 'text-gray-600 dark:text-gray-400'
+                              }`}>
                               {conversation.last_message.sender_id === currentUser.id ? 'You: ' : ''}
                               {conversation.last_message.message}
                             </p>
@@ -554,36 +582,35 @@ const RoomDirectMessages = ({ room, currentUser }) => {
               </div>
             ) : (
               <div className="space-y-3">
-                                 {/* Room Owner */}
-                 {roomData?.owner && (
-                   <div
-                     onClick={() => startConversationWithMember({ user: roomData.owner, role: 'owner' })}
-                     className={`p-3 sm:p-4 rounded-lg border transition-colors touch-manipulation ${
-                       roomData.owner.id === currentUser?.id
-                         ? 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 cursor-not-allowed opacity-75'
-                         : 'hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-500 active:bg-blue-100 dark:active:bg-blue-900/30'
-                     }`}
-                   >
+                {/* Room Owner */}
+                {roomData?.owner && (
+                  <div
+                    onClick={() => startConversationWithMember({ user: roomData.owner, role: 'owner' })}
+                    className={`p-3 sm:p-4 rounded-lg border transition-colors touch-manipulation ${roomData.owner.id === currentUser?.id
+                      ? 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 cursor-not-allowed opacity-75'
+                      : 'hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-500 active:bg-blue-100 dark:active:bg-blue-900/30'
+                      }`}
+                  >
                     <div className="flex items-center space-x-3">
                       <div className="relative">
                         <Avatar user={roomData.owner} size="md" showBorder={true} />
-                                                 <div className="absolute -bottom-1 -right-1">
-                           <TrophyIcon className="w-4 h-4 text-blue-500 bg-white dark:bg-gray-800 rounded-full p-0.5" />
-                         </div>
+                        <div className="absolute -bottom-1 -right-1">
+                          <TrophyIcon className="w-4 h-4 text-blue-500 bg-white dark:bg-gray-800 rounded-full p-0.5" />
+                        </div>
                       </div>
-                      
+
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center space-x-2">
                           <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
                             {roomData.owner.name}
                             {roomData.owner.id === currentUser?.id && <span className="text-blue-600 dark:text-blue-400"> (You)</span>}
                           </h4>
-                                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                             <TrophyIcon className="w-3 h-3 mr-1" />
-                             Owner
-                           </span>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                            <TrophyIcon className="w-3 h-3 mr-1" />
+                            Owner
+                          </span>
                         </div>
-                        
+
                         {/* Show conversation info if exists */}
                         {getMemberConversationInfo({ user: roomData.owner }) && (
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -604,21 +631,20 @@ const RoomDirectMessages = ({ room, currentUser }) => {
                     </div>
                   </div>
                 )}
-                
-                                 {/* Regular Members */}
-                 {roomMembers.filter(member => member.user.id !== roomData?.owner?.id).map((member) => {
-                   const conversationInfo = getMemberConversationInfo(member);
-                   const isCurrentUser = member.user.id === currentUser?.id;
-                  
+
+                {/* Regular Members */}
+                {roomMembers.filter(member => member.user.id !== roomData?.owner?.id).map((member) => {
+                  const conversationInfo = getMemberConversationInfo(member);
+                  const isCurrentUser = member.user.id === currentUser?.id;
+
                   return (
                     <div
                       key={member.user.id}
                       onClick={() => !isCurrentUser && startConversationWithMember(member)}
-                      className={`p-3 sm:p-4 rounded-lg border transition-colors touch-manipulation ${
-                        isCurrentUser
-                          ? 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 cursor-not-allowed opacity-75'
-                          : 'hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-500 active:bg-blue-100 dark:active:bg-blue-900/30'
-                      }`}
+                      className={`p-3 sm:p-4 rounded-lg border transition-colors touch-manipulation ${isCurrentUser
+                        ? 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 cursor-not-allowed opacity-75'
+                        : 'hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-500 active:bg-blue-100 dark:active:bg-blue-900/30'
+                        }`}
                     >
                       <div className="flex items-center space-x-3">
                         <div className="relative">
@@ -629,14 +655,14 @@ const RoomDirectMessages = ({ room, currentUser }) => {
                             </div>
                           )}
                         </div>
-                        
+
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center space-x-2">
                             <h4 className="text-sm font-medium text-gray-900 dark:text-white truncate">
                               {member.user.name}
                               {isCurrentUser && <span className="text-blue-600 dark:text-blue-400"> (You)</span>}
                             </h4>
-                            
+
                             {/* Role badges */}
                             <div className="flex items-center space-x-1">
                               {member.role === 'moderator' && (
@@ -647,16 +673,15 @@ const RoomDirectMessages = ({ room, currentUser }) => {
                               )}
                             </div>
                           </div>
-                          
+
                           {/* Show conversation info if exists */}
                           {conversationInfo && conversationInfo.last_message && (
                             <div className="flex items-center space-x-2 mt-1">
                               <UserIcon className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                              <p className={`text-xs truncate ${
-                                conversationInfo.unread_count > 0 
-                                  ? 'font-medium text-gray-900 dark:text-white' 
-                                  : 'text-gray-600 dark:text-gray-400'
-                              }`}>
+                              <p className={`text-xs truncate ${conversationInfo.unread_count > 0
+                                ? 'font-medium text-gray-900 dark:text-white'
+                                : 'text-gray-600 dark:text-gray-400'
+                                }`}>
                                 {conversationInfo.last_message.sender_id === currentUser.id ? 'You: ' : ''}
                                 {conversationInfo.last_message.message}
                               </p>
@@ -665,7 +690,7 @@ const RoomDirectMessages = ({ room, currentUser }) => {
                               </span>
                             </div>
                           )}
-                          
+
                           {/* Show "Start conversation" if no messages */}
                           {!conversationInfo && !isCurrentUser && (
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
